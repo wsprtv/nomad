@@ -12,10 +12,10 @@ generator.
 ## Supported Hardware
 
 Nomad currently has built-in support for the following tracker boards:
-* `ag6ns`
+* [ag6ns](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1)
 * `devel` (specify your own pin connections)
-* `jawbone`
-* `traquito`
+* [jawbone](https://github.com/EngineerGuy314/JAWBONE)
+* [traquito](https://traquito.github.io)
 
 Because MicroPython supports dozens of microcontrollers, porting to new 
 boards is easy.
