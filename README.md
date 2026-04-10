@@ -6,7 +6,7 @@ in [MicroPython](https://micropython.org/).
 Designed primarily for RP2040 and RP2350 microcontrollers, Nomad is built 
 to be simple and easily extensible. It currently supports several 
 existing tracker designs and can be adapted for new hardware with minimal 
-changes, provided the board contains a GPS chip and an Si5351A clock 
+changes, provided the board contains a GPS module and an Si5351A clock 
 generator.
 
 ## Supported Hardware

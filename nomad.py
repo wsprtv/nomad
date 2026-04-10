@@ -82,7 +82,7 @@ class Tracker:
       ct.pack(330, self._num_tx % 330)
     else:
       ct.pack(22, min(self._ttff // 5, 22))
-      ct.pack(15, pos.num_sats % 15)
+      ct.pack(15, min(pos.num_sats, 15))
     voltage = (self._last_voltage - 2) / 0.05
     ct.pack(5, math.floor(voltage * 5) % 5)
     ct.pack(3, 1 if voltage >= 40 else (2 if voltage < 0 else 0))
