@@ -459,29 +459,29 @@ class WSPRTransmitter:
     return (0x6996 >> (n & 0xf)) & 1
 
   def _convolute(self, n):
-    output = []
-    accum = 0
-    for bit in ('{:050b}'.format(n) + '0' * 31):
-      accum = ((accum << 1) | int(bit)) & 0xffffffff
-      output.append(self._compute_parity(accum & 0xf2d05351))
-      output.append(self._compute_parity(accum & 0xe4613c47))
+    output = bytearray(162)
+    acc = 0
+    for (i, bit) in enumerate('{:050b}'.format(n) + '0' * 31):
+      acc = ((acc << 1) | int(bit)) & 0xffffffff
+      output[i * 2] = self._compute_parity(acc & 0xf2d05351)
+      output[i * 2 + 1] = self._compute_parity(acc & 0xe4613c47)
     return output
 
-  def _interleave(self, words):
-    output = [0] * 162
-    idx1 = 0
+  def _interleave(self, symbols):
+    output = bytearray(162)
+    idx = 0
     for i in range(256):
-      idx2 = sum(((i >> j) & 1) << (7 - j) for j in range(8))
-      if idx2 < 162:
-        output[idx2] = words[idx1]
-        idx1 += 1
+      ri = (((i * 2050 & 139536) | (i * 32800 & 558144)) * 65793 >> 16) & 255
+      if ri < 162:
+        output[ri] = symbols[idx]
+        idx += 1
     return output
 
-  def _add_sync(self, words):
+  def _add_sync(self, symbols):
     sync = [0x7a47103, 0x58b340a4, 0x56349558, 0xe2cdc904, 0x63580ca0, 0]
     for i in range(162):
-      words[i] = words[i] * 2 + ((sync[i // 32] >> (i % 32)) & 1)
-    return words
+      symbols[i] = symbols[i] * 2 + ((sync[i >> 5] >> (i & 31)) & 1)
+    return symbols
 
 if __name__ == '__main__':
   try:
