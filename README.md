@@ -85,14 +85,24 @@ specific hardware).
 **Optional:**
 * `"min_hp_elev"`: *(Integer)* Uses 10 dBm TX mode when solar elevation 
 is under this threshold (in degrees). Uses 13 dBm otherwise.
+* `"min_uhp_elev"`: *(Integer)* Uses 15 dBm TX mode when solar elevation 
+is above this threshold (in degrees). Requires hardware modifications to
+existing boards.
+* `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
+use medium (10 dBm) power. 
+* `"disable_st"`: *(Boolean)* Set to `true` to send regular callsign 
+messages only (WSPR beacon mode).
 * `"enable_enhanced_st"`: *(Boolean)* Set to `true` to send enhanced 
 standard telemetry.
 * `"disable_led"`: *(Boolean)* Set to `true` to disable all LED activity 
 (useful for saving power).
-* `"geofenced_grids"`: *(Array of Strings)* List of Maidenhead grid 
-squares where transmission is disabled (e.g., `["DN87", "DN88"]`).
-* `"lp_mode"`: *(Boolean)* Set to `true` to force low transmission power 
-(approximately 0 dBm).
+* `"disable_watchdog"`: *(Boolean)* Set to `true` to disable the hardware 
+watchdog (useful for debugging).
+* `"geofenced_grids"`: *(Array of Strings)* List of Maidenhead grid2, grid4,
+or grid6 squares where transmission is disabled
+(e.g., `["DO87", "DN", "DM87ar"]`).
+* `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
+(approximately 3 dBm).
 
 ## LED Status Indicators
 
@@ -110,4 +120,7 @@ once per second. Indicates a solid GPS lock.
 If `"enable_enhanced_st"` is set to true, use the following CT Wizard
 template for decoding custom telemetry:
 
-<https://wsprtv.com/tools/ct_wizard.html?spec=http%3A%2F%2Flocalhost%3A8000%3Fband%3D20m%26ct_dec%3Dct%2Cs%3A2_256%3At100%2C256%3At101%2C20%3At102%2C256%3A0%3A1%26ct_labels%3Duptime>
+<https://wsprtv.com/tools/ct_wizard.html?spec=https%3A%2F%2Fwsprtv.com%3Fcs%3Dte5t%26ch%3Dt6%26band%3D20m%26ct_dec%3Dct%2Cs%3A2%2C5%3A2%3A0%3At_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C330%3A0%3A1~ct%2Cs%3A2%2C5%3A2%3A1%3At_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C15%3A0%3A1%2C22%3A0%3A5%26ct_labels%3DNumTX%2CNumSats%2CTTFF%26ct_units%3D%2C%2C%2Bs>
+
+Nomad's enhanced ST can also be viewed in WSPR TV without additional URL decorators, by appending
+`p10` to the channel number (e.g. `321p10`).

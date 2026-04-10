@@ -41,34 +41,78 @@ class Tracker:
         if 'gps_switch' in board else None
     self._si5351a_switch = Pin(board['si5351a_switch'], Pin.OUT, value = 1) \
         if 'si5351a_switch' in board else None
-    if 'gps_reset' in board: Pin(board['gps_reset'], Pin.OUT, value = 1)
-    if 'gps_vbat' in board: Pin(board['gps_vbat'], Pin.OUT, value = 1)
+    self._gps_vbat = Pin(board['gps_vbat'], Pin.OUT, value = 0) \
+        if 'gps_vbat' in board else None
+    self._gps_reset = Pin(board['gps_reset'], Pin.OUT, value = 0) \
+        if 'gps_reset' in board else None
     time.sleep(2)
+    if self._gps_vbat: self._gps_vbat.value(1)
+    if self._gps_reset: self._gps_reset.value(1)  # low-active
     if self._led: self._led.value(0)
     if machine.mem32[0x50110050] & (1 << 16):
-      machine.freq(48_000_000)  # USB connected
+      machine.freq(48000000)  # USB connected
     else:
-      machine.freq(18_000_000)
+      machine.freq(18000000)
     self._i2c = I2C(board['i2c'], scl = Pin(board['scl']),
                     sda = Pin(board['sda']), freq = 100000)
     self._last_pos = None
+    self._num_tx = 0
 
-  def run(self):
-    self._reset_gps()
+  def run(self):  # main loop
     while True:
       self._update_gps_position(exit_minute = self._start_minute)
       if not self._last_pos or self._now() - self._last_pos.ts > 120:
         continue  # no fresh location to send
       grid6 = self._get_grid()
-      if self._geofenced_grids and grid6[:4] in self._geofenced_grids:
-        continue
+      if self._is_geofenced(grid6): continue
       self._wait_for_slot(0)
       self._send(self._callsign, grid6[:4])
+      if self._disable_st: continue
       self._wait_for_slot(1)
       self._send(*self._encode_st())
       if self._enable_enhanced_st:
         self._wait_for_slot(2)
         self._send(*self._encode_enhanced_st(slot = 2))
+      self._num_tx += 1
+
+  def _encode_enhanced_st(self, slot):
+    ct = CustomTelemetry()
+    pos = self._last_pos
+    if (self._get_tx_seq() // 5) % 2 == 0:
+      ct.pack(330, self._num_tx % 330)
+    else:
+      ct.pack(22, min(self._ttff // 5, 22))
+      ct.pack(15, pos.num_sats % 15)
+    voltage = (self._last_voltage - 2) / 0.05
+    ct.pack(5, math.floor(voltage * 5) % 5)
+    ct.pack(3, 1 if voltage >= 40 else (2 if voltage < 0 else 0))
+    ct.pack(3, int(pos.speed * 3 / 2) % 3)
+    ct.pack(2, int(pos.speed / 2) > 41)
+    ct.pack(20, int(pos.altitude) % 20)
+    ct.pack(256, math.floor(pos.lat * 24 * 256) % 256)
+    ct.pack(256, math.floor(pos.lon * 12 * 256) % 256)
+    ct.pack_ct_header(slot)
+    return self._encode_big_num(ct.value)
+
+  def _encode_st(self):
+    grid6 = self._get_grid()
+    m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
+        (int(self._last_pos.altitude) // 20) % 1068
+    self._last_voltage = ADC(self._board['vsys']).read_u16() * 3 * 3.3 / 65535
+    self._last_temp = \
+        int(27 - (ADC(4).read_u16() * 3.3 / 65535 - 0.706) / 0.001721)
+    n = ((self._last_temp + 50) % 90) * 6720 + \
+        (math.floor((self._last_voltage - 2) / 0.05) % 40) * 168 + \
+        (int(self._last_pos.speed / 2) % 42) * 4 + 3
+    return self._encode_big_num(m * 615600 + n)
+
+  def _wait_for_slot(self, slot):
+    while True:
+      if self._watchdog: self._watchdog.feed()
+      t = time.gmtime(self._now())
+      if t[4] % 10 == (self._start_minute + slot * 2) % 10 and t[5] < 2:
+        break
+      time.sleep_ms(20)
 
   def _read_config(self):
     try:
@@ -76,7 +120,7 @@ class Tracker:
         config = json.load(f)
         self._callsign = config['callsign'].upper()
         if len(self._callsign) not in [4, 5, 6] or \
-            not all(c in '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            not all((c.isdigit() or (c.isalpha() and c.isupper()))
                     for c in self._callsign): raise Exception
         self._channel = int(config['channel'])
         if self._channel < 0 or self._channel > 599: raise Exception
@@ -89,8 +133,11 @@ class Tracker:
         self._xo_freq = int(config['xo_freq'])
         self._cs1 = ['0', '1', 'Q'][self._channel // 200]
         self._cs3 = chr(ord('0') + (self._channel // 20) % 10)
-        self._min_hp_elev = int(config.get('min_hp_elev', 0))
-        self._lp_mode = config.get('lp_mode', False)  # 0 dBm TX
+        self._min_hp_elev = int(config.get('min_hp_elev', -91))
+        self._min_uhp_elev = int(config.get('min_uhp_elev', 91))
+        self._num_initial_mp_tx = int(config.get('num_initial_mp_tx', 0))
+        self._force_lp_tx = config.get('force_lp_tx', False)  # 3dBm TX
+        self._disable_st = config.get('disable_st', False)
         self._enable_enhanced_st = config.get('enable_enhanced_st', False)
         self._disable_led = config.get('disable_led', False)
         self._disable_watchdog = config.get('disable_watchdog', False)
@@ -99,17 +146,12 @@ class Tracker:
     except Exception:
       while True: pass
 
-  def _reset_gps(self):
-    self._start_gps()
-    self._gps_uart.write('\r\n\r\n$PCAS10,2*1E\r\n')  # cold start
-    time.sleep_ms(500)
-    self._stop_gps()
-
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,
                            exit_minute = None):
     self._start_gps()
     nmea_parser = NMEAParser()
     start_time = time.time()
+    self._ttff = None
     num_fixes = 0
     self._gps_uart.read(self._gps_uart.any())  # flush GPS
     led_toggle_ticks = None
@@ -121,6 +163,7 @@ class Tracker:
         if pos and pos.valid:
           self._last_pos = pos
           self._gps_time_offset = pos.ts - time.time()
+          if self._ttff == None: self._ttff = time.time() - start_time
           num_fixes += 1
         if sentence[3:6] == 'RMC':
           if self._led: self._led.value(self._last_pos == None)
@@ -152,7 +195,6 @@ class Tracker:
     # Disable unused sentences
     self._gps_uart.write(
         '\r\n\r\n$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*33\r\n')
-    if self._led: self._led.value(1)
 
   def _stop_gps(self):
     self._gps_uart.deinit()
@@ -160,35 +202,19 @@ class Tracker:
     if self._gps_switch: self._gps_switch.value(1)  # off
     if self._led: self._led.value(0)
 
-  def _wait_for_slot(self, slot):
-    while True:
-      if self._watchdog: self._watchdog.feed()
-      ts = time.gmtime(self._now())
-      if ts[4] % 10 == (self._start_minute + slot * 2) % 10 and ts[5] < 2:
-        break
-      time.sleep_ms(20)
+  def _get_gps_sentence(self):
+    return ''.join(chr(b) for b in self._gps_uart.readline() or []).strip()
 
-  def _encode_st(self):
-    grid6 = self._get_grid()
-    m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
-        (int(self._last_pos.altitude) // 20) % 1068
-    self._last_voltage = ADC(self._board['vsys']).read_u16() * 3 * 3.3 / 65535
-    self._last_temp = \
-        int(27 - (ADC(4).read_u16() * 3.3 / 65535 - 0.706) / 0.001721)
-    n = ((self._last_temp + 50) % 90) * 6720 + \
-        (int((self._last_voltage - 2) / 0.05) % 40) * 168 + \
-        (int(self._last_pos.speed) // 2 * 4) + 3
-    return self._encode_big_num(m * 615600 + n)
+  def _now(self):
+    return time.time() + self._gps_time_offset
 
-  def _encode_enhanced_st(self, slot):
-    ct = CustomTelemetry()
-    pos = self._last_pos
-    ct.pack(256, (self._uptime() // 600) % 256)
-    ct.pack(20, int(pos.altitude) % 20)
-    ct.pack(256, int(pos.lat * 24 * 256) % 256)
-    ct.pack(256, int(pos.lon * 12 * 256) % 256)
-    ct.pack_ct_header(slot)
-    return self._encode_big_num(ct.value)
+  def _uptime(self):
+    return time.time() - self._initial_time_offset
+
+  def _get_tx_seq(self):
+    t = time.gmtime(((self._now() - self._start_minute * 60) // 600) * 600 + \
+        self._start_minute * 60)
+    return (t[2] - 1) * 720 + t[3] * 30 + t[4] // 2
 
   def _encode_big_num(self, v):
     if v % 2 == 0:  # custom telemetry
@@ -205,20 +231,17 @@ class Tracker:
         alphanum[(n // 190) % 10] + alphanum[(n // 19) % 10]
     return (cs, grid, power)
 
-  def _now(self):
-    return time.time() + self._gps_time_offset
-
-  def _uptime(self):
-    return time.time() - self._initial_time_offset
-
   def _send(self, cs, grid, power = None):
     if self._led: self._led.value(1)
     if self._si5351a_switch: self._si5351a_switch.value(0)  # on
     time.sleep_ms(200)
     transmitter = WSPRTransmitter(self._i2c, self._watchdog, self._xo_freq)
-    output_power = 0 if self._lp_mode else \
-        (1 + (self._get_solar_elevation() > self._min_hp_elev))
-    if power == None: power = [3, 10, 13][output_power]
+    solar_elev = self._get_solar_elevation()
+    output_power = 0 if self._force_lp_tx else 1
+    if self._num_tx >= self._num_initial_mp_tx:
+      if solar_elev > self._min_uhp_elev: output_power = 3
+      elif solar_elev > self._min_hp_elev: output_power = 2
+    if power == None: power = [3, 10, 13, 17][output_power]
     transmitter.send(self._freq, output_power, cs, grid, power)
     if self._si5351a_switch: self._si5351a_switch.value(1)  # off
     if self._led: self._led.value(0)
@@ -232,8 +255,10 @@ class Tracker:
         chr(ord('a') + int((pos.lon + 180) * 12) % 24) + \
         chr(ord('a') + int((pos.lat + 90) * 24) % 24)
 
-  def _get_gps_sentence(self):
-    return ''.join(chr(b) for b in self._gps_uart.readline() or []).strip()
+  def _is_geofenced(self, grid6):
+    return grid6 in self._geofenced_grids or \
+        grid6[:4] in self._geofenced_grids or \
+        (grid6[0] + grid6[2]) in self._geofenced_grids
 
   def _get_solar_elevation(self):
     pos = self._last_pos
@@ -313,7 +338,7 @@ class WSPRTransmitter:
     self._watchdog = watchdog
     self._xo_freq = xo_freq
 
-  # output_power: 0 = 0dBm, 1 = 10dBm, 2 = 13dBm
+  # output_power: 0 = 3dBm, 1 = 10dBm, 2 = 13Bm, 3 = 15dBm
   def send(self, freq, output_power, cs, grid, power):
     symbols = self._generate_symbols(cs, grid, power)
     if not symbols: return False
@@ -332,27 +357,21 @@ class WSPRTransmitter:
   def _initialize(self, output_power):
     # Wait for si5351a to start up
     while self._i2c.readfrom_mem(0x60, 0x00, 1)[0] & 0x80: pass
-    # Disable outputs
-    self._i2c.writeto_mem(0x60, 3, b'\xff')
-    # Select crystal inputs, power down drivers, ground disabled outputs
-    self._i2c.writeto_mem(0x60, 15, b'\x00' + (b'\x83' * 8) + b'\x00')
-    # Crystal load: 6/8/10pF = 0x12/0x92/0xd2
-    self._i2c.writeto_mem(0x60, 183, b'\x12')
-    # Power up outputs. Drive = 2mA for low output (0dBm), 8mA otherwise
-    drive = 0 if output_power == 0 else 3
-    self._i2c.writeto_mem(0x60, 16, bytes([0x4c | drive]))
-    if output_power == 2:  # invert second output
-      self._i2c.writeto_mem(0x60, 17, bytes([0x5c | drive]))
+    self._disable_outputs()
+    drive = [0, 3][output_power > 0]
+    clock_regs = bytes([0x4c | drive] + [[0x5f, 0x83][output_power < 2]] + \
+        [[0x5f, 0x83][output_power < 2]] + [0x83] * 5)
+    # Select XTAL inputs, set clocks, set disable state
+    self._i2c.writeto_mem(0x60, 15, b'\x00' + clock_regs + b'\x20')
 
   def _set_frequency(self, freq, output_power):
     self._compute_freq_params(freq)
     msx_p1 = 128 * self._d - 512
     r_log = len(bin(self._r)) - 3
-    regs = bytes([0x01,
+    regs = bytes([0, 0x01,
       (r_log << 4) | (0xc if (self._d == 4) else 0) | ((msx_p1 >> 16) & 3),
-      (msx_p1 >> 8) & 0xff, msx_p1 & 0xff])
-    self._i2c.writeto_mem(0x60, 43, regs)
-    if output_power == 2: self._i2c.writeto_mem(0x60, 51, regs)
+      (msx_p1 >> 8) & 0xff, msx_p1 & 0xff, 0, 0, 0])
+    self._i2c.writeto_mem(0x60, 42, regs * max(1, output_power))
     self._update_fmd()
     self._i2c.writeto_mem(0x60, 177, b'\x20')  # reset PLL
 
@@ -367,8 +386,7 @@ class WSPRTransmitter:
     self._i2c.writeto_mem(0x60, 26, regs)
 
   def _enable_outputs(self, output_power):
-    reg = b'\xfc' if output_power == 2 else b'\xfe'
-    self._i2c.writeto_mem(0x60, 3, reg)
+    self._i2c.writeto_mem(0x60, 3, bytes([b'\xfe\xfe\xfc\xf8'[output_power]]))
 
   def _disable_outputs(self):
     self._i2c.writeto_mem(0x60, 3, b'\xff')
@@ -419,7 +437,7 @@ class WSPRTransmitter:
     return enc_cs << 22 | enc_grid << 7 | (power + 64)
 
   def _encode_callsign(self, cs):
-    if not all(c in '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ' for c in cs):
+    if not all((c.isdigit() or (c.isalpha() and c.isupper())) for c in cs):
       return None
     if cs[1].isdigit() and cs[2].isalpha():
       cs = ' ' + cs
@@ -465,7 +483,8 @@ class WSPRTransmitter:
       words[i] = words[i] * 2 + ((sync[i // 32] >> (i % 32)) & 1)
     return words
 
-try:
-  Tracker().run()
-except Exception:
-  while True: pass
+if __name__ == '__main__':
+  try:
+    Tracker().run()
+  except Exception:
+    while True: pass
