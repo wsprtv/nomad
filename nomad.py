@@ -43,11 +43,9 @@ class Tracker:
         if 'si5351a_switch' in board else None
     self._gps_vbat = Pin(board['gps_vbat'], Pin.OUT, value = 0) \
         if 'gps_vbat' in board else None
-    self._gps_reset = Pin(board['gps_reset'], Pin.OUT, value = 0) \
-        if 'gps_reset' in board else None
+    if 'gps_reset' in board: Pin(board['gps_reset'], Pin.OUT, value = 1)
     time.sleep(2)
     if self._gps_vbat: self._gps_vbat.value(1)
-    if self._gps_reset: self._gps_reset.value(1)  # low-active
     if self._led: self._led.value(0)
     if machine.mem32[0x50110050] & (1 << 16):
       machine.freq(48000000)  # USB connected
@@ -188,7 +186,7 @@ class Tracker:
 
   def _start_gps(self):
     if self._gps_switch: self._gps_switch.value(0)  # on
-    time.sleep_ms(500)
+    time.sleep_ms(1000)
     self._gps_uart = UART(self._board['gps_uart'], baudrate = 9600,
         tx = Pin(self._board['gps_tx']), rx = Pin(self._board['gps_rx']),
         rxbuf = 512, txbuf = 512, timeout = 1000)
