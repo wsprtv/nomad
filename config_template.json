@@ -1,7 +1,0 @@
-{
-  "callsign": "<callsign>",
-  "channel": <u4b_ch>,
-  "band": "20m",
-  "xo_freq": 26000000
-  "board": "<board>"
-}
