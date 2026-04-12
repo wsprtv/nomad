@@ -34,9 +34,25 @@ it into USB).
 storage drive. The board will automatically reboot.
 
 ### 2. Upload Firmware and Configuration
-You need to copy two files to the board's filesystem: the firmware 
-(`nomad.py`, which must be renamed to `main.py` on the board) and your 
-configuration file (`config.json`).
+**Method A: Nomad Setup Tool (Recommended)**
+
+The easiest way to install the firmware and configure your tracker is by 
+using the browser-based setup tool (requires a Web Serial-compatible 
+browser like Chrome, Edge, or Opera):
+
+1. Open the [Nomad Setup Tool](https://wsprtv.com/nomad).
+2. Click **Connect to Device** and select your board from the popup.
+3. Under *Firmware Installation*, click **Install Latest from GitHub** 
+(this automatically downloads `nomad.py` and saves it to your board as 
+`main.py`).
+4. Use the *Configuration Manager* to set your callsign, 
+channel, band, and other settings, then click **Save Configuration**.
+
+**Method B: Manual Installation (Thonny / mpremote)**
+
+Alternatively, you can manually copy the two necessary files to the 
+board's filesystem: the firmware (`nomad.py`, which must be renamed to 
+`main.py` on the board) and your configuration file (`config.json`).
 
 You can do this using an IDE like **Thonny** (by saving the files 
 directly to the Raspberry Pi Pico) or via the command line using 
@@ -56,10 +72,14 @@ mpremote fs cp config.json :
 
 Once the files are copied, **power cycle the board** to start the tracker.
 
-## Configuration (`config.json`)
+### Manual Configuration (`config.json`)
 
-Create a `config.json` file in the root of your project before uploading. 
-Here is a minimal configuration example:
+*Note: If you are using the online Nomad Setup Tool, you can skip this 
+step as the tool generates and uploads this file for you automatically.*
+
+If you are installing manually via Thonny or `mpremote`, create a 
+`config.json` file in the root of your project before uploading. Here is 
+a minimal configuration example:
 
 ```json
 {
@@ -90,6 +110,8 @@ is above this threshold (in degrees). Requires hardware modifications to
 existing boards.
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
+* `"tx_interval"`: *(Integer)* Interval between TX cycles. Must be
+a multiple of 10 minutes.
 * `"disable_st"`: *(Boolean)* Set to `true` to send regular callsign 
 messages only (WSPR beacon mode).
 * `"enable_enhanced_st"`: *(Boolean)* Set to `true` to send enhanced 

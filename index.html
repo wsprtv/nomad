@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nomad Setup</title>
+  <style>
+    html, body {
+      margin: 0;
+      background-color: #f8f8f8;
+      height: 100%;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    h1 {
+      margin: 0;
+      color: #555;
+      font-size: 25px;
+      margin-bottom: 15px;
+    }
+    #wrapper {
+      padding: 20px;
+      display: inline-block;
+      width: 100%;
+      max-width: 800px;
+      box-sizing: border-box;
+    }
+    .blue_button {
+      margin: 5px 10px 5px 0;
+      padding: 5px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      background-color: #7777cc;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+      min-width: 130px; 
+    }
+    .blue_button:hover:not(:disabled) {
+      background-color: #5555aa;
+    }
+    .blue_button:disabled {
+      background-color: #b0b0d0;
+      cursor: not-allowed;
+      opacity: 0.8;
+    }
+    select { margin: 5px 0; padding: 6px; border-radius: 3px; border: 1px solid #aaa; width: 264px; }
+    input[type="text"], input[type="number"] { margin: 5px 0; padding: 6px; width: 250px; border: 1px solid #aaa; border-radius: 3px; }
+    .file-upload-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 5px;
+    }
+    input[type="file"] {
+      font-size: 13px;
+    }
+    input[type="file"]::file-selector-button {
+      padding: 5px 10px;
+      margin-right: 12px;
+      border-radius: 5px;
+      background-color: #eee;
+      border: 1px solid #aaa;
+      cursor: pointer;
+      font-family: inherit;
+      color: #333;
+      transition: background-color 0.2s;
+    }
+    input[type="file"]::file-selector-button:hover:not(:disabled) {
+      background-color: #ddd;
+    }
+    .box {
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 10px;
+      margin: 15px 0;
+      background-color: #f0f0f0; 
+    }
+    h2, h3 { margin: 5px 0; color: #444; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-bottom: 10px; }
+    a { display: inline-block; max-width: 1000px; word-break: break-all; overflow-wrap: anywhere; }
+    .config-card {
+      background: #fff;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .config-card label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 3px;
+      color: #333;
+    }
+    .config-card .desc {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+    .config-card input[type="checkbox"] { 
+      transform: scale(1.3); 
+      cursor: pointer; 
+      margin: 0 5px 0 0;
+    }
+    .schema-section { 
+      margin-top: 30px; 
+      margin-bottom: 15px; 
+      padding: 10px 12px;
+      background-color: #e4e4f0;
+      border-left: 4px solid #7777cc;
+      font-weight: bold; 
+      color: #333; 
+      text-transform: uppercase; 
+      font-size: 13px; 
+      border-radius: 4px;
+    }
+    textarea {
+      width: 100%;
+      font-family: monospace;
+      padding: 10px;
+      box-sizing: border-box;
+      background: #222;
+      color: #0f0;
+      border-radius: 4px;
+      margin-top: 5px;
+      resize: vertical;
+    }
+    #cmd_input {
+      background: #fff;
+      color: #333;
+      border: 1px solid #aaa;
+      margin-bottom: 8px;
+    }
+    
+    .info-text { font-size: 13px; color: #444; line-height: 1.4; margin-top: 10px; }
+    #dependent_ui {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="wrapper">
+    <h1>Nomad Setup</h1>
+
+    <div class="box">
+      <h3>Connection</h3>
+      <button id="connect_btn" class="blue_button">Connect to Device</button>
+      <button id="disconnect_btn" class="blue_button" disabled>Disconnect</button>
+      
+      <p class="info-text">
+        <strong>MicroPython Required:</strong> Ensure MicroPython is installed on your Pico before connecting. To install, hold the BOOTSEL button while plugging the Pico into your computer via USB. Then, drag and drop the <a href="https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2" target="_blank" style="color: #4444cc;">MicroPython UF2 file</a> onto the RPI-RP2 drive that appears.
+      </p>
+    </div>
+
+    <div id="dependent_ui">
+      
+      <div class="box">
+        <h3>Firmware Installation</h3>
+        <div style="margin-bottom: 15px; display: flex; align-items: center;">
+          <button id="upload_url_btn" class="blue_button" disabled>Install Latest from GitHub</button>
+          <span style="font-size: 12px; color: #666; margin-left: 5px;">(Fetches nomad.py and saves as main.py)</span>
+        </div>
+        <div style="border-top: 1px solid #ccc; padding-top: 15px; display: flex; align-items: center;">
+          <input type="file" id="file_input" style="display: none;">
+          <button id="upload_local_btn" class="blue_button" style="margin: 0;" disabled>Upload Local File</button>
+          <span style="font-size: 12px; color: #666; margin-left: 10px;">(Saves to main.py)</span>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Configuration Manager (config.json)</h3>
+        <button id="read_config_btn" class="blue_button" disabled>Load Configuration</button>
+        <button id="save_config_btn" class="blue_button" disabled style="display: none; background-color: #5c9e5c;">Save Configuration</button>
+        
+        <div id="config_editor" style="margin-top: 15px; padding: 15px; background: #fff; border-radius: 5px; border: 1px solid #ccc; display: none;"></div>
+        
+        <div id="bottom_save_container" style="margin-top: 10px; display: none; align-items: center; justify-content: flex-start; background: #fff; padding: 12px 15px; border-radius: 5px; border: 1px solid #ccc;">
+          <button id="save_config_btn_bottom" class="blue_button" disabled style="margin: 0 15px 0 0; background-color: #5c9e5c;">Save Configuration</button>
+          <span style="font-size: 13px; color: #555;"><em>&larr; Don't forget to save your changes</em></span>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Terminal</h3>
+        <textarea id="cmd_input" rows="3" placeholder="Type commands here..." disabled></textarea>
+        <div>
+          <button id="send_btn" class="blue_button" disabled>Send</button>
+          <button id="ctrl_c_btn" class="blue_button" style="background-color: #cc6666; min-width: auto;" disabled>Send Ctrl-C</button>
+          <button id="clear_btn" class="blue_button" style="background-color: #888; min-width: auto;">Clear</button>
+        </div>
+      </div>
+
+      <textarea id="output_area" rows="16" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+    // Serial port globals
+    let port;
+    let reader;
+    let input_stream;
+    let output_stream;
+    let input_done;
+    let output_done;
+    
+    let is_transferring = false;
+    let transfer_buffer = '';
+
+    // Configuration file schema definition
+    const config_schema = [
+      { key: 'callsign', type: 'text', label: 'Callsign', required: true, description: 'Your amateur radio callsign. (e.g., N0CALL)' },
+      { key: 'channel', type: 'number', label: 'Channel', required: true, description: 'Your designated U4B channel. (Must be between 0 and 599)' },
+      { key: 'band', type: 'select', label: 'Band', required: true, options: ['2200m', '630m', '160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m'], default: '20m', description: 'The transmission band.' },
+      { key: 'xo_freq', type: 'number', label: 'Crystal Frequency', required: true, default: 26000000, description: 'The frequency of your crystal (adjust according to your specific hardware).' },
+      { key: 'board', type: 'select', label: 'Board Type', required: true, options: ['ag6ns', 'devel', 'jawbone', 'traquito'], description: 'The target hardware you are running this on.' },
+      
+      { section: 'Optional Settings' },
+      
+      { key: 'min_hp_elev', type: 'number', label: 'Minimum Solar Elevation for High Power TX', placeholder: -90, required: false, description: 'Uses 10 dBm TX mode when solar elevation is under this threshold (in degrees). Uses 13 dBm otherwise.' },
+      { key: 'min_uhp_elev', type: 'number', label: 'Minimum Solar Elevation for Ultra High Power TX', placeholder: 90, required: false, description: 'Uses 15 dBm TX mode when solar elevation is above this threshold (in degrees). Requires hardware modifications.' },
+      { key: 'num_initial_mp_tx', type: 'number', label: 'Initial Number of TX Cycles at Medium Power', placeholder: 0, required: false, description: 'Number of TX cycles after startup to use medium (10 dBm) power.' },
+      { key: 'tx_interval', type: 'number', label: 'TX Interval (minutes)', placeholder: 10, required: false, description: 'Interval between TX cycles. Must be a multiple of 10 minutes.' },
+      { key: 'geofenced_grids', type: 'text', label: 'Geofenced Grids', placeholder: '', required: false, description: 'List of Maidenhead grid squares where transmission is disabled. Enter as a JSON array (e.g., ["DN", "DO87", "DO88ar"]).' },
+      
+      { key: 'disable_st', type: 'checkbox', label: 'Disable Standard Telemetry', required: false, description: 'Check to send regular callsign messages only (WSPR beacon mode).' },
+      { key: 'enable_enhanced_st', type: 'checkbox', label: 'Enable Enhanced Standard Telemetry', required: false, description: 'Check to send enhanced standard telemetry.' },
+      { key: 'disable_led', type: 'checkbox', label: 'Disable LED', required: false, description: 'Check to disable all LED activity (useful for saving power).' },
+      { key: 'disable_watchdog', type: 'checkbox', label: 'Disable Watchdog', required: false, description: 'Check to disable the hardware watchdog (useful for debugging).' },
+      { key: 'force_lp_tx', type: 'checkbox', label: 'Force Low Power TX', required: false, description: 'Check to force low transmission power (approximately 3 dBm).' }
+    ];
+
+    // DOM Elements
+    const dependent_ui = document.getElementById('dependent_ui');
+    const connect_btn = document.getElementById('connect_btn');
+    const disconnect_btn = document.getElementById('disconnect_btn');
+    const cmd_input = document.getElementById('cmd_input');
+    const send_btn = document.getElementById('send_btn');
+    const ctrl_c_btn = document.getElementById('ctrl_c_btn');
+    const clear_btn = document.getElementById('clear_btn');
+    
+    const file_input = document.getElementById('file_input');
+    const upload_local_btn = document.getElementById('upload_local_btn');
+    const upload_url_btn = document.getElementById('upload_url_btn');
+    
+    const read_config_btn = document.getElementById('read_config_btn');
+    const save_config_btn = document.getElementById('save_config_btn');
+    const save_config_btn_bottom = document.getElementById('save_config_btn_bottom');
+    const bottom_save_container = document.getElementById('bottom_save_container');
+    const config_editor = document.getElementById('config_editor');
+    const output_area = document.getElementById('output_area');
+
+    // Utility functions
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    function logMsg(msg, isError=false) {
+      const prefix = isError ? "[ERROR]" : "[System]";
+      output_area.value += `\n${prefix} ${msg}\n`;
+      output_area.scrollTop = output_area.scrollHeight;
+    }
+
+    function bufferToBase64(buffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    }
+
+    // Connect to the serial port and verify MicroPython presence
+    async function connect() {
+      try {
+        const rpVendorId = 0x2e8a;
+        const mpProductId = 0x0005;
+        
+        // 1. Check if we already have permission for a connected Pico
+        const existingPorts = await navigator.serial.getPorts();
+        port = existingPorts.find(p => {
+          const info = p.getInfo();
+          return info.usbVendorId === rpVendorId && info.usbProductId === mpProductId;
+        });
+
+        // 2. If no authorized port is found, prompt the user with a filtered list
+        if (!port) {
+          port = await navigator.serial.requestPort({ 
+            filters: [{ usbVendorId: rpVendorId, usbProductId: mpProductId }] 
+          });
+        }
+        
+        await port.open({ baudRate: 115200 });
+
+        const encoder = new TextEncoderStream();
+        output_done = encoder.readable.pipeTo(port.writable);
+        output_stream = encoder.writable;
+
+        const decoder = new TextDecoderStream();
+        input_done = port.readable.pipeTo(decoder.writable);
+        input_stream = decoder.readable;
+
+        reader = input_stream.getReader();
+        readLoop();
+
+        connect_btn.disabled = true;
+        disconnect_btn.disabled = false;
+        
+        logMsg("Connected to serial port. Interrupting any running scripts...");
+        
+        // 3. Send double Ctrl-C to forcefully stop any running main.py loops
+        if (output_stream) {
+          const writer = output_stream.getWriter();
+          await writer.write('\r\x03\x03'); 
+          writer.releaseLock();
+          await sleep(300); 
+        }
+
+        logMsg("Verifying MicroPython and clearing watchdog (if RP2/RP2350)...");
+        
+        // 4. Check architecture and safely clear the hardware watchdog to prevent reboots
+        const setup_code = `
+import sys
+try:
+    if sys.platform == 'rp2':
+        import machine, os
+        if 'RP2040' in os.uname().machine:
+            machine.mem32[0x40058000] = 0
+        elif 'RP2350' in os.uname().machine:
+            machine.mem32[0x400d8000] = 0
+except:
+    pass
+print('PING')`;
+
+        const ping_res = await runPythonCode(setup_code, 2000);
+        
+        if (!ping_res.includes('PING')) {
+            alert("MicroPython does not appear to be installed or responding.\n\nPlease follow the instructions in the Connection box to install the MicroPython UF2 file first.");
+            await disconnect();
+            return;
+        }
+
+        // 5. Reveal the main interface
+        dependent_ui.style.display = 'block';
+        
+        cmd_input.disabled = false;
+        send_btn.disabled = false;
+        ctrl_c_btn.disabled = false;
+        upload_local_btn.disabled = false;
+        upload_url_btn.disabled = false;
+        read_config_btn.disabled = false;
+        
+        logMsg("MicroPython detected successfully.");
+        
+        // 6. Automatically populate the settings form
+        await loadConfig();
+
+      } catch (err) {
+        if (err.name !== 'NotFoundError') { // Ignore if the user just closed the serial prompt
+            alert(`Connection failed: ${err.message}`);
+        }
+        await disconnect();
+      }
+    }
+
+    // Safely disconnect streams and issue a soft reboot to the board
+    async function disconnect() {
+      try {
+        if (output_stream && !disconnect_btn.disabled) {
+          try {
+            logMsg("Rebooting device...");
+            const writer = output_stream.getWriter();
+            await writer.write('\r\x01'); 
+            await sleep(50);
+            await writer.write('import machine; machine.reset()\x04'); 
+            writer.releaseLock();
+            await sleep(150); 
+          } catch (e) {
+            console.log("Could not send reset command:", e);
+          }
+        }
+
+        if (reader) {
+          await reader.cancel().catch(() => {});
+          await input_done.catch(() => {});
+          reader = null;
+        }
+        if (output_stream) {
+          await output_stream.getWriter().close().catch(() => {});
+          await output_done.catch(() => {});
+          output_stream = null;
+        }
+        if (port) {
+          await port.close().catch(() => {});
+        }
+      } catch (err) {
+        console.error("Disconnect error:", err);
+      } finally {
+        connect_btn.disabled = false;
+        disconnect_btn.disabled = true;
+        cmd_input.disabled = true;
+        send_btn.disabled = true;
+        ctrl_c_btn.disabled = true;
+        upload_local_btn.disabled = true;
+        upload_url_btn.disabled = true;
+        read_config_btn.disabled = true;
+        save_config_btn.disabled = true;
+        save_config_btn_bottom.disabled = true;
+        
+        dependent_ui.style.display = 'none';
+        config_editor.style.display = 'none';
+        bottom_save_container.style.display = 'none';
+        
+        output_area.value = '';
+      }
+    }
+
+    // Continuous read loop for incoming serial data
+    async function readLoop() {
+      while (true) {
+        try {
+          const { value, done } = await reader.read();
+          if (value) {
+            if (is_transferring) {
+              transfer_buffer += value;
+            } else {
+              output_area.value += value;
+              output_area.scrollTop = output_area.scrollHeight;
+            }
+          }
+          if (done) {
+            reader.releaseLock();
+            break;
+          }
+        } catch (err) {
+          if (disconnect_btn.disabled === false) {
+             logMsg("Connection dropped by device (likely rebooting).", true);
+             await disconnect();
+          }
+          break;
+        }
+      }
+    }
+
+    // Execute raw Python commands and capture the output
+    async function runPythonCode(code, timeout_ms = 10000) {
+      is_transferring = true;
+      transfer_buffer = '';
+      const writer = output_stream.getWriter();
+      
+      try {
+        await writer.write('\r\x01'); // Enter raw REPL
+        await sleep(50);
+        
+        transfer_buffer = ''; 
+        await writer.write(code + '\x04'); // Execute code
+        
+        let elapsed = 0;
+        const interval = 100;
+        while (!transfer_buffer.endsWith('>') && elapsed < timeout_ms) {
+          await sleep(interval);
+          elapsed += interval;
+        }
+        
+        const result = transfer_buffer;
+        await writer.write('\x02'); // Exit raw REPL
+        return result;
+      } finally {
+        writer.releaseLock();
+        is_transferring = false;
+      }
+    }
+
+    // Core function to chunk Base64 data and write it to the Pico filesystem
+    async function performUpload(base64_data, target_btn, original_btn_text, target_filename) {
+      target_btn.disabled = true;
+      try {
+        target_btn.innerText = `Starting...`;
+        await runPythonCode(`import ubinascii\nf = open('${target_filename}', 'wb')\nf.close()`);
+        
+        const chunk_size = 512;
+        const total_chunks = Math.ceil(base64_data.length / chunk_size);
+        
+        for (let i = 0; i < base64_data.length; i += chunk_size) {
+          const chunk = base64_data.substring(i, i + chunk_size);
+          const code = `f = open('${target_filename}', 'ab')\nf.write(ubinascii.a2b_base64(b'${chunk}'))\nf.close()`;
+          await runPythonCode(code);
+          
+          const current_chunk = Math.floor(i / chunk_size) + 1;
+          const percent = Math.round((current_chunk / total_chunks) * 100);
+          target_btn.innerText = `Writing ${percent}%`;
+        }
+        
+        logMsg(`Successfully flashed ${target_filename}`);
+      } catch (err) {
+        logMsg(`Write failed: ${err.message}`, true);
+        alert(`Failed to flash ${target_filename}. Check terminal log.`);
+      } finally {
+        target_btn.innerText = original_btn_text;
+        target_btn.disabled = false;
+      }
+    }
+
+    // Proxy the button click to the hidden file input
+    upload_local_btn.addEventListener('click', () => {
+      file_input.click();
+    });
+
+    // Automatically trigger upload once a file is selected
+    file_input.addEventListener('change', async function() {
+      const file = file_input.files[0];
+      if (!file) return;
+
+      const file_reader = new FileReader();
+      file_reader.onload = async function(e) {
+        const base64_data = bufferToBase64(e.target.result);
+        await performUpload(base64_data, upload_local_btn, "Upload Local File", "main.py");
+        file_input.value = ''; // Reset input so the same file can be selected again if needed
+      };
+      file_reader.readAsArrayBuffer(file);
+    });
+
+    async function uploadUrlFile() {
+      const nomad_url = "https://raw.githubusercontent.com/wsprtv/nomad/refs/heads/main/nomad.py";
+      upload_url_btn.disabled = true;
+      upload_url_btn.innerText = "Downloading...";
+
+      try {
+        const response = await fetch(nomad_url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const array_buffer = await response.arrayBuffer();
+        const base64_data = bufferToBase64(array_buffer);
+        
+        await performUpload(base64_data, upload_url_btn, "Install Latest from GitHub", "main.py");
+      } catch (err) {
+        logMsg(`Fetch failed: ${err.message}`, true);
+        alert(`Could not fetch firmware from GitHub.\nError: ${err.message}`);
+        upload_url_btn.innerText = "Install Latest from GitHub";
+        upload_url_btn.disabled = false;
+      }
+    }
+
+    // Dynamically build the HTML form based on the configuration schema
+    function renderConfigForm(existingConfig = {}) {
+      config_editor.innerHTML = '';
+      
+      config_schema.forEach(item => {
+        // Render section headers
+        if (item.section) {
+          const sec = document.createElement('div');
+          sec.className = 'schema-section';
+          sec.innerText = item.section;
+          config_editor.appendChild(sec);
+          return;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'config-card';
+
+        // Layout checkboxes side-by-side with their descriptions
+        if (item.type === 'checkbox') {
+          card.style.display = 'flex';
+          card.style.alignItems = 'flex-start';
+          
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.id = `cfg_${item.key}`;
+          input.checked = (existingConfig[item.key] !== undefined ? existingConfig[item.key] : item.default) === true;
+          
+          const textWrapper = document.createElement('div');
+          
+          const label = document.createElement('label');
+          label.innerText = item.label;
+          label.style.marginBottom = '0';
+          
+          const desc = document.createElement('div');
+          desc.className = 'desc';
+          desc.innerText = item.description;
+          desc.style.marginBottom = '0';
+          
+          textWrapper.appendChild(label);
+          textWrapper.appendChild(desc);
+          
+          card.appendChild(input);
+          card.appendChild(textWrapper);
+          
+        } else {
+          // Standard layout for text and number inputs
+          const label = document.createElement('label');
+          label.innerText = item.label + (item.required ? ' *' : '');
+          
+          const desc = document.createElement('div');
+          desc.className = 'desc';
+          desc.innerHTML = item.description;
+          
+          let input;
+          const val = existingConfig[item.key] !== undefined ? existingConfig[item.key] : item.default;
+
+          if (item.type === 'select') {
+            input = document.createElement('select');
+            input.id = `cfg_${item.key}`;
+            item.options.forEach(opt => {
+              const option = document.createElement('option');
+              option.value = opt;
+              option.innerText = opt;
+              if (val === opt) option.selected = true;
+              input.appendChild(option);
+            });
+          } else {
+            input = document.createElement('input');
+            input.type = item.type;
+            input.id = `cfg_${item.key}`;
+            if (item.placeholder !== undefined) {
+               input.placeholder = item.placeholder;
+            }
+            
+            if (item.key === 'geofenced_grids' && Array.isArray(val)) {
+               input.value = JSON.stringify(val);
+            } else {
+               input.value = val !== undefined ? val : '';
+            }
+          }
+          
+          card.appendChild(label);
+          card.appendChild(desc);
+          card.appendChild(input);
+        }
+        
+        config_editor.appendChild(card);
+      });
+    }
+
+    // Read config.json from the device filesystem
+    async function loadConfig() {
+      read_config_btn.disabled = true;
+      read_config_btn.innerText = "Reading...";
+      
+      const code = `import sys\ntry:\n with open('config.json', 'r') as f:\n  sys.stdout.write(f.read())\nexcept Exception:\n sys.stdout.write('ERR_NO_FILE')`;
+      const raw_response = await runPythonCode(code);
+      
+      if (raw_response.startsWith('OK')) {
+        const stdout = raw_response.substring(2).split('\x04')[0].trim();
+        
+        if (stdout === 'ERR_NO_FILE') {
+          logMsg("config.json not found on device. Loading empty template.");
+          renderConfigForm({});
+        } else {
+          try {
+            const config_obj = JSON.parse(stdout);
+            renderConfigForm(config_obj);
+            logMsg("Configuration loaded successfully.");
+          } catch (e) {
+            logMsg("Failed to parse config.json. Loading template.", true);
+            renderConfigForm({});
+          }
+        }
+        
+        config_editor.style.display = 'block';
+        save_config_btn.style.display = 'inline-block';
+        save_config_btn.disabled = false;
+        
+        bottom_save_container.style.display = 'flex';
+        save_config_btn_bottom.disabled = false;
+        
+      } else {
+        logMsg("Failed to communicate with device while loading config.", true);
+      }
+      
+      read_config_btn.innerText = "Load Configuration";
+      read_config_btn.disabled = false;
+    }
+
+    // Validate form inputs and upload back to config.json
+    async function saveConfig(e) {
+      const active_btn = (e && e.currentTarget) ? e.currentTarget : save_config_btn;
+      const new_config = {};
+      let has_error = false;
+      let error_messages = [];
+      
+      config_schema.forEach(item => {
+        if (item.section) return;
+        
+        const el = document.getElementById(`cfg_${item.key}`);
+        if (!el) return;
+        
+        let val;
+        let item_has_error = false;
+        el.style.borderColor = "#aaa"; 
+        
+        // Extract field values
+        if (item.type === 'checkbox') {
+           val = el.checked; 
+        } else if (item.type === 'number') {
+           val = el.value !== "" ? parseFloat(el.value) : "";
+        } else if (item.key === 'geofenced_grids') {
+           if (el.value.trim() !== "") {
+              try {
+                const arr = JSON.parse(el.value);
+                if (Array.isArray(arr)) {
+                    val = arr;
+                } else {
+                    throw new Error("Not an array");
+                }
+              } catch(e) {
+                item_has_error = true;
+                error_messages.push("Geofenced grids must be a valid JSON array.");
+              }
+           } else {
+             val = "";
+           }
+        } else {
+           val = el.value.trim();
+           // Normalize callsigns
+           if (item.key === 'callsign') {
+              val = val.toUpperCase();
+              el.value = val; 
+           }
+        }
+        
+        // Ensure required fields are not empty
+        if (item.required && (val === "" || val === undefined || val === null)) {
+           item_has_error = true;
+           error_messages.push(`${item.label} is a required field.`);
+        }
+        
+        // Strict validation rules
+        if (item.key === 'channel' && val !== "") {
+           if (val < 0 || val > 599) {
+              item_has_error = true;
+              error_messages.push("Channel must be between 0 and 599.");
+           }
+        }
+        
+        if (item.key === 'callsign' && val !== "") {
+           if (!/^[A-Z0-9]{3,8}$/.test(val) || !/\d/.test(val)) {
+              item_has_error = true;
+              error_messages.push(`'${val}' does not appear to be a valid callsign format.`);
+           }
+        }
+        
+        if (item_has_error) {
+            el.style.borderColor = "red";
+            has_error = true;
+        } else {
+            if (val !== "" && val !== false || (item.type === 'checkbox' && val === true)) {
+                if(item.type === 'checkbox') {
+                     if(val) new_config[item.key] = true;
+                } else if (item.key !== 'geofenced_grids' || Array.isArray(val)) {
+                     new_config[item.key] = val;
+                }
+            }
+        }
+      });
+      
+      // Prevent upload if validation failed
+      if (has_error) {
+         alert("Save aborted. Please fix the highlighted fields:\n\n- " + error_messages.join("\n- "));
+         return; 
+      }
+      
+      const json_str = JSON.stringify(new_config, null, 2);
+      const base64_data = bufferToBase64(new TextEncoder().encode(json_str));
+      
+      await performUpload(base64_data, active_btn, "Save Configuration", "config.json");
+    }
+
+    async function sendCommand() {
+      const cmd = cmd_input.value;
+      if (output_stream && cmd) {
+        const writer = output_stream.getWriter();
+        // Ensure multi-line inputs properly format as standard CRLF
+        const formattedCmd = cmd.replace(/\r?\n/g, '\r\n');
+        await writer.write(formattedCmd + '\r\n');
+        writer.releaseLock();
+        cmd_input.value = ''; 
+      }
+    }
+
+    async function sendCtrlC() {
+      if (output_stream) {
+        const writer = output_stream.getWriter();
+        await writer.write('\x03'); 
+        writer.releaseLock();
+      }
+    }
+
+    // UI Bindings
+    clear_btn.addEventListener('click', () => { output_area.value = ''; });
+    connect_btn.addEventListener('click', connect);
+    disconnect_btn.addEventListener('click', disconnect);
+    upload_url_btn.addEventListener('click', uploadUrlFile);
+    read_config_btn.addEventListener('click', loadConfig);
+    save_config_btn.addEventListener('click', saveConfig);
+    save_config_btn_bottom.addEventListener('click', saveConfig);
+    send_btn.addEventListener('click', sendCommand);
+    ctrl_c_btn.addEventListener('click', sendCtrlC);
+  </script>
+</body>
+</html>
