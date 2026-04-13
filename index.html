@@ -71,7 +71,7 @@
       background-color: #ddd;
     }
     .box {
-      border: 1px solid #bbb;
+      border: 1px solid #a8a8a8;
       border-radius: 10px;
       padding: 10px;
       margin: 15px 0;
@@ -478,6 +478,7 @@ print('PING')`;
       target_btn.disabled = true;
       try {
         target_btn.innerText = `Starting...`;
+        target_btn.style.backgroundImage = `linear-gradient(to right, rgba(0,0,0,0.25) 0%, transparent 0%)`;
         await runPythonCode(`import ubinascii\nf = open('${target_filename}', 'wb')\nf.close()`);
         
         const chunk_size = 512;
@@ -490,19 +491,24 @@ print('PING')`;
           
           const current_chunk = Math.floor(i / chunk_size) + 1;
           const percent = Math.round((current_chunk / total_chunks) * 100);
+          // Update text and progress bar fill
           target_btn.innerText = `Writing ${percent}%`;
+          target_btn.style.backgroundImage = `linear-gradient(to right, rgba(0,0,0,0.25) ${percent}%, transparent ${percent}%)`;
         }
-        
         logMsg(`Successfully flashed ${target_filename}`);
+        // Show success state and wait 1 second
+        target_btn.innerText = "Done!";
+        await sleep(1000);
       } catch (err) {
         logMsg(`Write failed: ${err.message}`, true);
         alert(`Failed to flash ${target_filename}. Check terminal log.`);
       } finally {
+        // Revert to original state
         target_btn.innerText = original_btn_text;
+        target_btn.style.backgroundImage = '';
         target_btn.disabled = false;
       }
     }
-
     // Proxy the button click to the hidden file input
     upload_local_btn.addEventListener('click', () => {
       file_input.click();
