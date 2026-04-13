@@ -27,12 +27,13 @@ BOARDS = {
     'si5351a_switch': 28, 'led': 25, 'vsys': 29 } }
 
 class Tracker:
-  def __init__(self):
+  def __init__(self, debug = False):
     self._initial_time_offset = time.time()
+    self._debug = debug
     self._read_config()
     board = self._board
     self._watchdog = WDT(timeout = 8000) \
-        if not self._disable_watchdog else None
+        if (not self._disable_watchdog and not self._debug) else None
     self._led = Pin(board['led'], Pin.OUT, value = 1) \
         if not self._disable_led else None
     self._gps_switch = Pin(board['gps_switch'], Pin.OUT, value = 1) \
@@ -78,8 +79,8 @@ class Tracker:
     if (self._get_tx_seq() // 5) % 2 == 0:
       ct.pack(330, self._num_tx % 330)
     else:
-      ct.pack(22, min(self._ttff // 5, 22))
-      ct.pack(15, min(pos.num_sats, 15))
+      ct.pack(22, min(self._ttff // 5, 21))
+      ct.pack(15, min(max(0, pos.num_sats - 3), 14))
     voltage = (self._last_voltage - 2) / 0.05
     ct.pack(5, math.floor(voltage * 5) % 5)
     ct.pack(3, 1 if voltage >= 40 else (2 if voltage < 0 else 0))
@@ -147,7 +148,7 @@ class Tracker:
       self._board = BOARDS[config['board']]
 
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,
-                           exit_minute = None, debug = False):
+                           exit_minute = None):
     self._start_gps()
     nmea_parser = NMEAParser()
     start_time = time.time()
@@ -159,7 +160,7 @@ class Tracker:
       if self._gps_uart.any():
         if self._watchdog: self._watchdog.feed()
         sentence = self._get_gps_sentence()
-        if debug: print(sentence)
+        if self._debug: print(sentence)
         pos = nmea_parser.parse(sentence)
         if pos and pos.valid:
           self._last_pos = pos
@@ -243,7 +244,7 @@ class Tracker:
     if self._si5351a_switch: self._si5351a_switch.value(0)  # on
     time.sleep_ms(250)
     transmitter = WSPRTransmitter(self._i2c, self._watchdog, self._xo_freq)
-    solar_elev = self._get_solar_elevation()
+    solar_elev = self._get_solar_elevation() if self._last_pos else 0
     output_power = 0 if self._force_lp_tx else 1
     if self._num_tx >= self._num_initial_mp_tx:
       if solar_elev > self._min_uhp_elev: output_power = 3
