@@ -185,6 +185,17 @@
       display: flex;
       align-items: center;
     }
+    #save_as_main_label {
+      font-size: 13px;
+      color: #777;
+      margin-left: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    #save_as_main_chk {
+      margin: 0 5px 0 0;
+    }
     #save_config_btn {
       display: none;
       background-color: #5c9e5c;
@@ -243,9 +254,9 @@
           <button id="upload_local_btn"
             class="blue_button" style="margin: 0;"
             disabled>Upload Local File</button>
-          <span style="font-size: 13px; color: #777; margin-left: 10px;">
-            (Saves to main.py)
-          </span>
+          <label id="save_as_main_label">
+            <input type="checkbox" id="save_as_main_chk" checked> Save as main.py
+          </label>
         </div>
       </div>
       <div class="box">
@@ -391,22 +402,23 @@
     // Connect to the serial port and verify MicroPython presence
     async function connect() {
       try {
-        const rpVendorId = 0x2e8a;
-        const mpProductId = 0x0005;
+        const rp_vendor_id = 0x2e8a;
+        const mp_product_id = 0x0005;
 
         // 1. Check if we already have permission for a connected Pico
-        const existingPorts = await navigator.serial.getPorts();
-        port = existingPorts.find(p => {
+        const existing_ports = await navigator.serial.getPorts();
+        port = existing_ports.find(p => {
           const info = p.getInfo();
-          return info.usbVendorId === rpVendorId &&
-              info.usbProductId === mpProductId;
+          return info.usbVendorId === rp_vendor_id &&
+              info.usbProductId === mp_product_id;
         });
 
         // 2. If no authorized port is found, prompt the user with a
         // filtered list
         if (!port) {
           port = await navigator.serial.requestPort({ 
-            filters: [{ usbVendorId: rpVendorId, usbProductId: mpProductId }] 
+            filters: [{ usbVendorId: rp_vendor_id,
+                        usbProductId: mp_product_id }]
           });
         }
         await port.open({ baudRate: 115200 });
@@ -649,11 +661,15 @@ print('PING')`;
       const file = file_input.files[0];
       if (!file) return;
 
+      // Determine target filename based on checkbox state
+      const save_as_main = document.getElementById('save_as_main_chk').checked;
+      const target_filename = save_as_main ? "main.py" : file.name;
+
       const file_reader = new FileReader();
       file_reader.onload = async function(e) {
         const base64_data = bufferToBase64(e.target.result);
         await performUpload(base64_data, upload_local_btn,
-            "Upload Local File", "main.py");
+            "Upload Local File", target_filename);
         // Reset input so the same file can be selected again if needed
         file_input.value = '';
       };
@@ -684,7 +700,7 @@ print('PING')`;
     }
 
     // Dynamically build the HTML form based on the configuration schema
-    function renderConfigForm(existingConfig = {}) {
+    function renderConfigForm(existing_config = {}) {
       config_editor.innerHTML = '';
 
       config_schema.forEach(item => {
@@ -708,10 +724,10 @@ print('PING')`;
           const input = document.createElement('input');
           input.type = 'checkbox';
           input.id = `cfg_${item.key}`;
-          input.checked = (existingConfig[item.key] !== undefined ?
-              existingConfig[item.key] : item.default) === true;
+          input.checked = (existing_config[item.key] !== undefined ?
+              existing_config[item.key] : item.default) === true;
 
-          const textWrapper = document.createElement('div');
+          const text_wrapper = document.createElement('div');
 
           const label = document.createElement('label');
           label.innerText = item.label;
@@ -722,11 +738,11 @@ print('PING')`;
           desc.innerText = item.description;
           desc.style.marginBottom = '0';
 
-          textWrapper.appendChild(label);
-          textWrapper.appendChild(desc);
+          text_wrapper.appendChild(label);
+          text_wrapper.appendChild(desc);
 
           card.appendChild(input);
-          card.appendChild(textWrapper);
+          card.appendChild(text_wrapper);
         } else {
           // Standard layout for text and number inputs
           const label = document.createElement('label');
@@ -737,8 +753,8 @@ print('PING')`;
           desc.innerHTML = item.description;
 
           let input;
-          const val = existingConfig[item.key] !== undefined ?
-              existingConfig[item.key] : item.default;
+          const val = existing_config[item.key] !== undefined ?
+              existing_config[item.key] : item.default;
 
           if (item.type === 'select') {
             input = document.createElement('select');
@@ -907,8 +923,8 @@ print('PING')`;
       if (output_stream && cmd) {
         const writer = output_stream.getWriter();
         // Ensure multi-line inputs properly format as standard CRLF
-        const formattedCmd = cmd.replace(/\r?\n/g, '\r\n');
-        await writer.write(formattedCmd + '\r\n');
+        const formatted_cmd = cmd.replace(/\r?\n/g, '\r\n');
+        await writer.write(formatted_cmd + '\r\n');
         writer.releaseLock();
         cmd_input.value = ''; 
       }
