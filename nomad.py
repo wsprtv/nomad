@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.001
+# Nomad: U4B-Protocol Tracker v1.002
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
