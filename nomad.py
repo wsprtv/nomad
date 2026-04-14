@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.002
+# Nomad: U4B-Protocol Tracker v1.003
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -83,7 +83,7 @@ class Tracker:
       ct.pack(15, min(max(0, pos.num_sats - 3), 14))
     voltage = (self._last_voltage - 2) / 0.05
     ct.pack(5, math.floor(voltage * 5) % 5)
-    ct.pack(3, 1 if voltage >= 40 else (2 if voltage < 0 else 0))
+    ct.pack(3, 1 if voltage >= 60 else (2 if voltage < 20 else 0))
     ct.pack(3, int(pos.speed * 3 / 2) % 3)
     ct.pack(2, int(pos.speed / 2) > 41)
     ct.pack(20, int(pos.altitude) % 20)
