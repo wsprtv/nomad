@@ -424,11 +424,11 @@
         await port.open({ baudRate: 115200 });
 
         const encoder = new TextEncoderStream();
-        output_done = encoder.readable.pipeTo(port.writable);
+        output_done = encoder.readable.pipeTo(port.writable).catch(() => {});
         output_stream = encoder.writable;
 
         const decoder = new TextDecoderStream();
-        input_done = port.readable.pipeTo(decoder.writable);
+        input_done = port.readable.pipeTo(decoder.writable).catch(() => {});
         input_stream = decoder.readable;
 
         reader = input_stream.getReader();
@@ -499,9 +499,10 @@ print('PING')`;
     }
 
     // Safely disconnect streams and issue a soft reboot to the board
-    async function disconnect() {
+    async function disconnect(is_device_lost = false) {
       try {
-        if (output_stream && !disconnect_btn.disabled) {
+        if (!is_device_lost === true && output_stream &&
+            !output_stream.locked && !disconnect_btn.disabled) {
           try {
             logMsg("Rebooting device...");
             const writer = output_stream.getWriter();
@@ -511,22 +512,22 @@ print('PING')`;
             writer.releaseLock();
             await sleep(150); 
           } catch (e) {
-            console.log("Could not send reset command:", e);
           }
         }
-
+        // Close streams safely
         if (reader) {
           await reader.cancel().catch(() => {});
-          await input_done.catch(() => {});
           reader = null;
         }
-        if (output_stream) {
+        if (output_stream && !output_stream.locked) {
           await output_stream.getWriter().close().catch(() => {});
-          await output_done.catch(() => {});
-          output_stream = null;
         }
+        output_stream = null;
+        if (input_done) await input_done;
+        if (output_done) await output_done;
         if (port) {
           await port.close().catch(() => {});
+          port = null;
         }
       } catch (err) {
         console.error("Disconnect error:", err);
@@ -941,7 +942,7 @@ print('PING')`;
     // UI Bindings
     clear_btn.addEventListener('click', () => { output_area.value = ''; });
     connect_btn.addEventListener('click', connect);
-    disconnect_btn.addEventListener('click', disconnect);
+    disconnect_btn.addEventListener('click', () => disconnect(false));
     upload_url_btn.addEventListener('click', uploadUrlFile);
     read_config_btn.addEventListener('click', loadConfig);
     save_config_btn.addEventListener('click', saveConfig);
