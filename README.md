@@ -272,70 +272,72 @@ the current environmental values, such as: `('19.76C', '996.61hPa', '0.00%')`.
 With hardware verified, you can now modify the main tracker script to encode
 and transmit this data.
 
-1. Download the latest
+1\. Download the latest
    [`nomad.py`](https://github.com/wsprtv/nomad/blob/main/nomad.py)
    to your local machine.
-2. At the top of `nomad.py`, add the import statement for your driver:
+
+2\. At the top of `nomad.py`, add the import statement for your driver:
    ```python
    from bme280_float import *
    ```
-3. Locate the `run(self)` loop within the `Tracker` class. Replace the
+3\. Locate the `run(self)` loop within the `Tracker` class. Replace the
    enhanced standard telemetry block with your CT function call. The necessary
    modifications are highlighted below:
 
-  ```python
-    def run(self):  # main loop
-      self._reset_gps()
-      while True:
-        self._update_gps_position(exit_minute=self._start_minute)
-        if not self._should_tx():
-          self._num_skipped_tx += 1
-          continue
+```python
+  def run(self):  # main loop
+    self._reset_gps()
+    while True:
+      self._update_gps_position(exit_minute=self._start_minute)
+      if not self._should_tx():
+        self._num_skipped_tx += 1
+        continue
 
-        self._wait_for_slot(0)
-        self._send(self._callsign, self._get_grid()[:4])
+      self._wait_for_slot(0)
+      self._send(self._callsign, self._get_grid()[:4])
 
-        if not self._disable_st:
-          self._wait_for_slot(1)
-          self._send(*self._encode_st())
+      if not self._disable_st:
+        self._wait_for_slot(1)
+        self._send(*self._encode_st())
 
-          # --- MODIFIED SECTION BEGINS HERE ---
-          self._wait_for_slot(2)
-          self._send(*self._encode_my_ct(slot = 2))
-          # --- MODIFIED SECTION ENDS HERE ---
+        # --- MODIFIED SECTION BEGINS HERE ---
+        self._wait_for_slot(2)
+        self._send(*self._encode_my_ct(slot = 2))
+        # --- MODIFIED SECTION ENDS HERE ---
 
-        self._num_tx += 1
-  ```
+      self._num_tx += 1
+```
 
-4. Add the new `_encode_my_ct` function directly under the `run` function
+4\. Add the new `_encode_my_ct` function directly under the `run` function
    block:
 
-  ```python
-    def _encode_my_ct(self, slot):
-      ct = CustomTelemetry()
-      bmp280 = BME280(i2c = self._i2c, address = 0x77)
-      (temp, pressure, _) = bmp280.read_compensated_data()
+```python
+  def _encode_my_ct(self, slot):
+    ct = CustomTelemetry()
+    bmp280 = BME280(i2c = self._i2c, address = 0x77)
+    (temp, pressure, _) = bmp280.read_compensated_data()
         
-      # Pack altitude: 50m increments from 0 to 16150m
-      ct.pack(324, int(bmp280.altitude / 50) % 324)
+    # Pack altitude: 50m increments from 0 to 16150m
+    ct.pack(324, int(bmp280.altitude / 50) % 324)
         
-      # Pack temperature: 0.1C increments with a -60C offset
-      ct.pack(1000, int((temp + 60) * 10) % 1000)
+    # Pack temperature: 0.1C increments with a -60C offset
+    ct.pack(1000, int((temp + 60) * 10) % 1000)
         
-      # Pack pressure: 0.01 hPa increments from 0 to 1200 hPa
-      ct.pack(120000, int(pressure) % 120000)
+    # Pack pressure: 0.01 hPa increments from 0 to 1200 hPa
+    ct.pack(120000, int(pressure) % 120000)
         
-      ct.pack_ct_header(slot)
-      return self._encode_big_num(ct.value)
-  ```
+    ct.pack_ct_header(slot)
+    return self._encode_big_num(ct.value)
+```
 
   Create a dedicated `i2c` instance if `self._i2c` (used
   for communicating with si5351a) isn't appropriate.
 
-5. Return to the setup tool. **Check** the "Save as main.py" box,
+5\. Return to the setup tool. **Check** the "Save as main.py" box,
    then click **Upload Local File** and select your
    modified `nomad.py`.
-6. Re-connect the board to initiate test transmissions.
+
+6\. Re-connect the board to initiate test transmissions.
 
 ### 5. Decoding the Data
 
