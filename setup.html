@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- (C) 2026 WSPR TV authors -->
+  <!-- https://wsprtv.com/nomad -->
+  <!-- License: AGPL 3.0 -->
   <title>Nomad Setup</title>
   <style>
     html, body {
@@ -277,7 +280,7 @@
       <div class="box">
         <h3>Terminal</h3>
         <textarea id="cmd_input" rows="3" placeholder="Type commands here..."
-          disabled></textarea>
+          spellcheck="false" disabled></textarea>
         <div>
           <button id="send_btn" class="blue_button" disabled>Send</button>
           <button id="ctrl_c_btn" class="blue_button"
@@ -921,7 +924,7 @@ print('PING')`;
 
     async function sendCommand() {
       const cmd = cmd_input.value;
-      if (output_stream && cmd) {
+      if (output_stream) {
         const writer = output_stream.getWriter();
         // Ensure multi-line inputs properly format as standard CRLF
         const formatted_cmd = cmd.replace(/\r?\n/g, '\r\n');
