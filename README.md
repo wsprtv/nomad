@@ -353,6 +353,6 @@ Click "Generate URL" to create your Custom Telemetry link for WSPR TV.
 After you upload some test transmissions, you should be able to see your
 BMP280 values in the data view of WSPR TV:
 
-<img src="images/img4.png" width=700>
+<img src="images/img4.png" width=600>
 
 <img src="images/img5.png">
