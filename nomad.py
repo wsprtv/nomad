@@ -31,6 +31,8 @@ class Tracker:
     self._initial_time_offset = time.time()
     self._debug = debug
     self._read_config()
+    global nomad_ct
+    if self._ct_slots: import nomad_ct
     board = self._board
     self._watchdog = WDT(timeout = 8000) \
         if (not self._disable_watchdog and not self._debug) else None
@@ -65,10 +67,18 @@ class Tracker:
         continue
       self._wait_for_slot(0)
       self._send(self._callsign, self._get_grid()[:4])
-      if not self._disable_st:
-        self._wait_for_slot(1)
-        self._send(*self._encode_st())
-        if self._enable_enhanced_st:
+      for slot in [1, 2, 3, 4]:
+        if slot in self._ct_slots:
+          self._wait_for_slot(slot)
+          ct = CustomTelemetry()
+          if getattr(nomad_ct, f'pack_ct{slot}')(
+              ct = ct, slot = slot, **self._get_ct_context()) in [True, None]:
+            self._send(*self._encode_big_num(ct.value))
+            continue
+        if slot == 1 and not self._disable_st:
+          self._wait_for_slot(1)
+          self._send(*self._encode_st())
+        elif slot == 2 and self._enable_enhanced_st:
           self._wait_for_slot(2)
           self._send(*self._encode_enhanced_st(slot = 2))
       self._num_tx += 1
@@ -77,18 +87,18 @@ class Tracker:
     ct = CustomTelemetry()
     pos = self._last_pos
     if (self._get_tx_seq() // 5) % 2 == 0:
-      ct.pack(330, self._num_tx % 330)
+      ct.pack(330, self._num_tx)
     else:
       ct.pack(22, min(self._ttff // 5, 21))
       ct.pack(15, min(max(0, pos.num_sats - 3), 14))
     voltage = (self._last_voltage - 2) / 0.05
-    ct.pack(5, math.floor(voltage * 5) % 5)
+    ct.pack(5, math.floor(voltage * 5))
     ct.pack(3, 1 if voltage >= 60 else (2 if voltage < 20 else 0))
-    ct.pack(3, int(pos.speed * 3 / 2) % 3)
+    ct.pack(3, int(pos.speed * 3 / 2))
     ct.pack(2, int(pos.speed / 2) > 41)
-    ct.pack(20, int(pos.altitude) % 20)
-    ct.pack(256, math.floor(pos.lat * 24 * 256) % 256)
-    ct.pack(256, math.floor(pos.lon * 12 * 256) % 256)
+    ct.pack(20, int(pos.altitude))
+    ct.pack(256, math.floor(pos.lat * 24 * 256))
+    ct.pack(256, math.floor(pos.lon * 12 * 256))
     ct.pack_ct_header(slot)
     return self._encode_big_num(ct.value)
 
@@ -116,6 +126,9 @@ class Tracker:
       if t[4] % 10 == (self._start_minute + slot * 2) % 10 and t[5] < 2:
         break
       time.sleep_ms(20)
+
+  def _get_ct_context(self):
+    return { 'i2c': self._i2c, 'last_pos': self._last_pos, 'now': self._now() }
 
   def _read_config(self):
     with open('config.json', 'r') as f:
@@ -145,6 +158,7 @@ class Tracker:
       self._disable_led = config.get('disable_led', False)
       self._disable_watchdog = config.get('disable_watchdog', False)
       self._geofenced_grids = config.get('geofenced_grids', [])
+      self._ct_slots = config.get('ct_slots', [])
       self._board = BOARDS[config['board']]
 
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,
@@ -283,13 +297,13 @@ class CustomTelemetry:
     self.value = 0
 
   def pack(self, size, value):
-    self.value = self.value * size + value
+    self.value = self.value * size + value % size
 
   def pack_ct_header(self, slot):
-    self.value = (self.value * 5 + slot) * 2
+    self.value = (self.value * 5 + slot % 5) * 2
 
-  def pack_et_header(self, slot, hdr_type):
-    self.value = (self.value * 16 + hdr_type) * 4
+  def pack_et0_header(self, slot, hdr_type):
+    self.value = (self.value * 16 + hdr_type % 16) * 4
     self.pack_ct_header(slot)
 
 class Position:

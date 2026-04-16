@@ -127,6 +127,9 @@ or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
 * `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
 (approximately 3 dBm).
+* `"ct_slots"`: *(Array of Integers)* List of slots in which to send
+Custom Telemetry. Requires `nomad_ct.py` if not empty. Slot values
+should be between 1 and 4, where 0 is the regular callsign slot.
 
 ## LED Status Indicators
 
@@ -149,8 +152,8 @@ positional accuracy to just a few meters.
 * Altitude resolution is increased 20x to 1 meter.
 * Speed range is improved from 0-152 km/h to 0-310 km/h, and speed
 resolution is increased from 3.7 km/h to 1.2 km/h.
-* Voltage range is increased from 3.00-4.95V to 1.00-6.99V, with
-resolution improving from 0.05V to 0.01V.
+* Voltage range is increased from 3.00-4.95V to 1.00-6.99V, with a
+resolution of 0.01V.
 
 Additionally, enhanced standard telemetry messages include the number
 of attempted TX cycles since boot, GPS time to first fix (TTFF), and
@@ -269,73 +272,42 @@ the current environmental values, such as: `('19.76C', '996.61hPa', '0.00%')`.
 
 ### 4. Adding Custom Telemetry
 
-With hardware verified, you can now modify the main tracker script to encode
-and transmit this data.
+With hardware verified, you can now add BMP280 custom telemetry to Nomad.
+We will be using slot 2.
 
-1\. Download the latest
-   [`nomad.py`](https://github.com/wsprtv/nomad/blob/main/nomad.py)
-   to your local machine.
-
-2\. At the top of `nomad.py`, add the import statement for your driver:
-   ```python
-   from bme280_float import *
-   ```
-3\. Locate the `run(self)` loop within the `Tracker` class. Replace the
-   enhanced standard telemetry block with your CT function call. The necessary
-   modifications are highlighted below:
+1\. Create the file `nomad_ct.py` on your local machine with the following
+   content:
 
 ```python
-  def run(self):  # main loop
-    self._reset_gps()
-    while True:
-      self._update_gps_position(exit_minute=self._start_minute)
-      if not self._should_tx():
-        self._num_skipped_tx += 1
-        continue
+from bme280_float import * 
 
-      self._wait_for_slot(0)
-      self._send(self._callsign, self._get_grid()[:4])
-
-      if not self._disable_st:
-        self._wait_for_slot(1)
-        self._send(*self._encode_st())
-
-        # --- MODIFIED SECTION BEGINS HERE ---
-        self._wait_for_slot(2)
-        self._send(*self._encode_my_ct(slot = 2))
-        # --- MODIFIED SECTION ENDS HERE ---
-
-      self._num_tx += 1
+def pack_ct2(ct, slot, i2c, **other_args):
+  bmp280 = BME280(i2c = i2c, address = 0x77)
+  (temp, pressure, _) = bmp280.read_compensated_data()
+  # Pack altitude: 50m increments from 0 to 16150m
+  ct.pack(324, int(bmp280.altitude / 50))
+  # Pack temperature: 0.1C increments with a -60C offset
+  ct.pack(1000, int((temp + 60) * 10))
+  # Pack pressure: 0.01 hPa increments from 0 to 1200 hPa
+  ct.pack(120000, int(pressure))
+  ct.pack_ct_header(slot)
 ```
 
-4\. Add the new `_encode_my_ct` function directly under the `run` function
-   block:
+Here we are defining the function `pack_ct2`, which Nomad will
+call when we enable Custom Telemetry in the Setup Tool or in
+`config.json` (using the `ct_slots` setting). For slot 3, the
+function would be called `pack_ct3`.
 
-```python
-  def _encode_my_ct(self, slot):
-    ct = CustomTelemetry()
-    bmp280 = BME280(i2c = self._i2c, address = 0x77)
-    (temp, pressure, _) = bmp280.read_compensated_data()
-        
-    # Pack altitude: 50m increments from 0 to 16150m
-    ct.pack(324, int(bmp280.altitude / 50) % 324)
-        
-    # Pack temperature: 0.1C increments with a -60C offset
-    ct.pack(1000, int((temp + 60) * 10) % 1000)
-        
-    # Pack pressure: 0.01 hPa increments from 0 to 1200 hPa
-    ct.pack(120000, int(pressure) % 120000)
-        
-    ct.pack_ct_header(slot)
-    return self._encode_big_num(ct.value)
-```
+Nomad will pass us a Custom Telemetry object, `ct`, that we will
+pack with BMP280 sensor values. We will also add a CT header at
+the end via `ct.pack_ct_header(slot)`. If we wanted to encode
+the message as extended telemetry (ET0) instead, we would
+terminate the message with `ct.pack_et0_header(slot, hdr_type = 0)`.
 
-  Create a dedicated `i2c` instance if `self._i2c` (used
-  for communicating with si5351a) isn't appropriate.
-
-5\. Return to the setup tool. **Check** the "Save as main.py" box,
-   then click **Upload Local File** and select your
-   modified `nomad.py`.
+5\. Connect to the board using the setup tool.
+   Upload the latest `nomad.py` from Github. **Uncheck** the
+   "Save as main.py" box, then click **Upload Local File** to
+   install `nomad_ct.py`.
 
 6\. Re-connect the board to initiate test transmissions.
 

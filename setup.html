@@ -128,7 +128,7 @@
     .config-card input[type="checkbox"] { 
       transform: scale(1.3); 
       cursor: pointer; 
-      margin: 0 5px 0 0;
+      margin: 0 8px 0 0;
     }
     .schema-section { 
       margin-top: 30px; 
@@ -258,7 +258,8 @@
             class="blue_button" style="margin: 0;"
             disabled>Upload Local File</button>
           <label id="save_as_main_label">
-            <input type="checkbox" id="save_as_main_chk" checked> Save as main.py
+            <input type="checkbox" id="save_as_main_chk"
+              checked> Save as main.py
           </label>
         </div>
       </div>
@@ -338,28 +339,37 @@
         label: 'Initial Number of TX Cycles at Medium Power', placeholder: 0,
         required: false, description:
           'Number of TX cycles after startup to use medium (10 dBm) power.' },
+      { key: 'force_lp_tx', type: 'checkbox', label: 'Force Low Power TX',
+        required: false, description:
+          'Check to force low transmission power (approximately 3 dBm).' },
       { key: 'tx_interval', type: 'number', label: 'TX Interval (minutes)',
         placeholder: 10, required: false, description:
           'Interval between TX cycles. Must be a multiple of 10 minutes.' },
-      { key: 'geofenced_grids', type: 'text', label: 'Geofenced Grids',
-        placeholder: '', required: false, description:
-          'List of Maidenhead grid squares where transmission is disabled. ' +
-          'Enter as a JSON array (e.g., ["DN", "DO87", "DO88ar"]).' },
       { key: 'disable_st', type: 'checkbox',
         label: 'Disable Standard Telemetry', required: false, description:
           'Check to send regular callsign messages only (WSPR beacon mode).' },
       { key: 'enable_enhanced_st', type: 'checkbox',
         label: 'Enable Enhanced Standard Telemetry', required: false,
         description: 'Check to send enhanced standard telemetry.' },
+      { key: 'geofenced_grids', type: 'text', label: 'Geofenced Grids',
+        placeholder: '', required: false, description:
+          'Comma-separated list of Maidenhead grid squares where ' +
+          'transmission is disabled. Can be any combination of ' +
+          'grid2, grid4, or grid6 formats (e.g., DN, DO87, DO88ar).' },
       { key: 'disable_led', type: 'checkbox', label: 'Disable LED',
         required: false, description:
           'Check to disable all LED activity (useful for saving power).' },
       { key: 'disable_watchdog', type: 'checkbox', label: 'Disable Watchdog',
         required: false, description:
           'Check to disable the hardware watchdog (useful for debugging).' },
-      { key: 'force_lp_tx', type: 'checkbox', label: 'Force Low Power TX',
-        required: false, description:
-          'Check to force low transmission power (approximately 3 dBm).' }
+
+      { section: 'Custom Telemetry' },
+
+      { key: 'ct_slots', type: 'text',
+        label: 'Custom Telemetry Slots', required: false,
+        description: 'Comma-separated list of custom telemetry slots ' +
+          '(e.g. 2, 3). Requires nomad_ct.py if not empty. Slot values ' +
+          'should be between 1 and 4, where 0 is the regular callsign slot.' }
     ];
 
     // DOM Elements
@@ -777,8 +787,9 @@ print('PING')`;
             if (item.placeholder !== undefined) {
               input.placeholder = item.placeholder;
             }
-            if (item.key === 'geofenced_grids' && Array.isArray(val)) {
-              input.value = JSON.stringify(val);
+            if ((item.key === 'geofenced_grids' ||
+                 item.key === 'ct_slots') && Array.isArray(val)) {
+              input.value = val.join(', ');
             } else {
               input.value = val !== undefined ? val : '';
             }
@@ -851,20 +862,11 @@ print('PING')`;
           val = el.checked;
         } else if (item.type === 'number') {
           val = el.value !== "" ? parseFloat(el.value) : "";
-        } else if (item.key === 'geofenced_grids') {
+        } else if (item.key === 'geofenced_grids' || item.key === 'ct_slots') {
           if (el.value.trim() !== "") {
-            try {
-              const arr = JSON.parse(el.value);
-              if (Array.isArray(arr)) {
-                val = arr;
-              } else {
-                throw new Error("Not an array");
-              }
-            } catch(e) {
-              item_has_error = true;
-              error_messages.push(
-                  "Geofenced grids must be a valid JSON array.");
-            }
+            val = el.value.split(',').map(s => s.trim())
+                .filter(s => s.length > 0);
+            if (item.key === 'ct_slots') val = val.map(s => Number(s));
           } else {
             val = "";
           }
