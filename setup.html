@@ -350,7 +350,7 @@
           'Check to send regular callsign messages only (WSPR beacon mode).' },
       { key: 'enable_enhanced_st', type: 'checkbox',
         label: 'Enable Enhanced Standard Telemetry', required: false,
-        description: 'Check to send enhanced standard telemetry.' },
+        description: 'Check to send enhanced standard telemetry in slot 2.' },
       { key: 'geofenced_grids', type: 'text', label: 'Geofenced Grids',
         placeholder: '', required: false, description:
           'Comma-separated list of Maidenhead grid squares where ' +
@@ -369,7 +369,8 @@
         label: 'Custom Telemetry Slots', required: false,
         description: 'Comma-separated list of custom telemetry slots ' +
           '(e.g. 2, 3). Requires nomad_ct.py if not empty. Slot values ' +
-          'should be between 1 and 4, where 0 is the regular callsign slot.' }
+          'should be between 1 and 4, where 0 is the regular callsign slot. ' +
+          'Sending CT in slots 1 and 4 is not recommended.' }
     ];
 
     // DOM Elements
