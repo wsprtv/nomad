@@ -13,18 +13,20 @@ WSPR_BANDS = {  # [start_minute_offset, start_freq]
   '6m': [8, 50294400] }
 
 BOARDS = {
-  'ag6ns': { 'i2c': 0, 'scl': 13, 'sda': 12, 'gps_uart': 1, 'gps_tx': 8,
-    'gps_rx': 9, 'gps_switch': 16, 'gps_reset': 5, 'si5351a_switch': 4,
-    'led': 25, 'vsys': 29 },
-  'devel': { 'i2c': 0, 'scl': 21, 'sda': 20, 'gps_uart': 0, 'gps_tx': 0,
-    'gps_rx': 1, 'gps_switch': 10, 'gps_vbat': 5, 'si5351a_switch': 22,
-    'led': 25, 'vsys': 29 },
-  'jawbone': { 'i2c': 0, 'scl': 1, 'sda': 0, 'gps_uart': 1, 'gps_tx': 8,
-    'gps_rx': 9, 'gps_switch': 11, 'si5351a_switch': 18, 'led': 25,
-    'vsys': 29 },
-  'traquito': { 'i2c': 0, 'scl': 5, 'sda': 4, 'gps_uart': 1, 'gps_tx': 8,
-    'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6, 'gps_vbat': 3,
-    'si5351a_switch': 28, 'led': 25, 'vsys': 29 } }
+  'ag6ns': { 'i2c': { 'id': 0, 'scl': 13, 'sda': 12 },
+    'i2c_alt': { 'id': 1, 'scl': 3, 'sda': 2 },
+    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 16,
+    'gps_reset': 5, 'si5351a_switch': 4, 'led': 25, 'vsys': 29 },
+  'devel': { 'i2c': { 'id': 0, 'scl': 21, 'sda': 20 },
+    'gps_uart': 0, 'gps_tx': 0, 'gps_rx': 1, 'gps_switch': 10,
+    'gps_vbat': 5, 'si5351a_switch': 22, 'led': 25, 'vsys': 29 },
+  'jawbone': { 'i2c': { 'id': 0, 'scl': 1, 'sda': 0 },
+    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 11,
+    'si5351a_switch': 18, 'led': 25, 'vsys': 29 },
+  'traquito': { 'i2c': { 'id': 0, 'scl': 5, 'sda': 4 },
+    'i2c_alt': { 'id': 1, 'scl': 15, 'sda': 14 },
+    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
+    'gps_vbat': 3, 'si5351a_switch': 28, 'led': 25, 'vsys': 29 } }
 
 class Tracker:
   def __init__(self, debug = False):
@@ -52,8 +54,11 @@ class Tracker:
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)
-    self._i2c = I2C(board['i2c'], scl = Pin(board['scl']),
-                    sda = Pin(board['sda']), freq = 100000)
+    self._i2c = I2C(board['i2c']['id'], scl = Pin(board['i2c']['scl']),
+        sda = Pin(board['i2c']['sda']), freq = 100000)
+    self._i2c_alt = I2C(board['i2c_alt']['id'],
+        scl = Pin(board['i2c_alt']['scl']), sda = Pin(board['i2c_alt']['sda']),
+        freq = 100000) if board['i2c_alt'] else None
     self._last_pos = None
     self._num_tx = 0
     self._num_skipped_tx = 0
@@ -71,7 +76,7 @@ class Tracker:
         if slot in self._ct_slots:
           self._wait_for_slot(slot)
           ct = CustomTelemetry()
-          if getattr(nomad_ct, f'pack_ct{slot}')(
+          if getattr(nomad_ct, f'handle_ct{slot}')(
               ct = ct, slot = slot, **self._get_ct_context()) in [True, None]:
             self._send(*self._encode_big_num(ct.value))
             continue
@@ -128,7 +133,8 @@ class Tracker:
       time.sleep_ms(20)
 
   def _get_ct_context(self):
-    return { 'i2c': self._i2c, 'last_pos': self._last_pos, 'now': self._now() }
+    return { 'i2c': self._i2c, 'i2c_alt': self._i2c_alt,
+             'last_pos': self._last_pos, 'now': self._now() }
 
   def _read_config(self):
     with open('config.json', 'r') as f:

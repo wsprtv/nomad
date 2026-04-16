@@ -186,6 +186,59 @@ marginal increase in current consumption (a few mA).
 
 ## Custom Telemetry
 
+When you specify Custom Telemetry slots in the setup tool or in
+`config.json`, Nomad expects you to upload a separate file, `nomad_ct.py`,
+containing the code to handle each enabled slot. These functions
+are called `handle_ct2`, `handle_ct3`, etc. and are provided with the
+following arguments:
+
+* **ct** - a CustomTelemetry object that you populate using the following
+functions:
+  * `ct.pack(<field_size>, value)` - used to pack a value. `<field_size>`
+    specifies the maximum number of values that the field can contain.
+    `value` must be within the range [0, `field_size` - 1].
+  * `ct.pack_ct_header(slot)` - used to terminate the message with a
+    Custom Telemetry header for given slot. This function should be
+    called last.
+  * `ct.pack_et0_header(hdr_type)` - used to terminate the message with an
+    ET0 header instead. `hdr_type` should be 0 for USER_DEFINED.
+* **i2c** - the main i2c instance used by Nomad for communicating with
+  si5351a.
+* **i2c_alt** - an alternate i2c instance that you may use for communicating
+  with sensors if they do not share si5351a's bus.
+* **last_pos** - a GPS position object containing the following fields:
+  * `ts` - timestamp, expressed as the number of seconds since epoch
+  * `lat` - latitude (float, -90 - 90)
+  * `lon` - longitude (float, -180 - 180)
+  * `altitude` - altitude in meters (float)
+  * `speed` - speed in knots (float)
+  * `course` - heading in degrees (float)
+  * `num_sats` - number of satellites used for the fix (integer)
+  * `pdop`, `hdop` and `vdop` - fix quality indicators
+* **now** - current GPS-derived time, expressed  as the number of seconds
+  since epoch
+
+Your functions should only list the arguments they need, leaving the
+rest in `**other_args`. For example, if only `last_pos` is
+needed, you can define your function as follows:
+
+```python
+def handle_ct2(ct, last_pos, **other_args):
+  # Pack last_pos to ct
+```
+
+Functions can optionally return `False` to communicate to Nomad that
+custom telemetry should not be sent in this slot at this time.
+
+Custom telemetry messages override standard telemetry and enhanced
+standard telemetry if configured for slots 1 and 2. Sending custom
+telemetry in slot 4 is supported but not recommended, as there is not
+enough time then to obtain a new GPS position for the next TX cycle.
+Slot 1 custom telemetry is not recommended either, as it replaces
+U4B standard telemetry.
+
+### BMP280 Tutorial
+
 Because Nomad is built on MicroPython, it benefits from extensive community
 support for a wide variety of sensors. You can find existing drivers by
 searching for `<sensor name> micropython`.
@@ -227,7 +280,7 @@ driver.
 Before modifying the transmission sequence, verify that the sensor is
 communicating properly. Scroll down to the terminal section of the setup tool.
 
-If you are using a dedicated I2C bus for the sensor, initialize it manually:
+If you are using a custom I2C bus for the sensor, initialize it manually:
 
 ```python
 from machine import I2C, Pin
@@ -238,18 +291,20 @@ i2c = I2C(<i2c_peripheral>, scl = Pin(<scl_pin>), sda = Pin(<sda_pin>),
 *(Replace `<i2c_peripheral>`, `<scl_pin>`, and `<sda_pin>` with the correct
 integer values for your board's connections).*
 
-**Alternative: Sharing the Si5351a I2C Bus**
+**Alternative: Using Nomad's I2C Instances**
 
-If your sensor shares the same I2C pins used by the Si5351a clock generator,
-you can leverage Nomad's existing I2C initialization:
+In many cases, you can leverage Nomad's existing I2C configuration:
 
 1. Use the setup tool to install the latest Nomad firmware
-2. Run the following in the terminal to grab the active I2C instance:
+2. Run the following in the terminal to grab Nomad's I2C instance:
 
 ```python
 from main import *
 tracker = Tracker(debug = 1)
-i2c = tracker._i2c
+# using the alternate i2c bus
+i2c = tracker._i2c_alt
+# or if using the same bus as si5351a
+# i2c = tracker._i2c
 ```
 
 **Reading the Data**
@@ -270,7 +325,7 @@ the current environmental values, such as: `('19.76C', '996.61hPa', '0.00%')`.
 
 <img src="images/img2.png" width=640>
 
-### 4. Adding Custom Telemetry
+### 4. Sending Custom Telemetry
 
 With hardware verified, you can now add BMP280 custom telemetry to Nomad.
 We will be using slot 2.
@@ -281,8 +336,8 @@ We will be using slot 2.
 ```python
 from bme280_float import * 
 
-def pack_ct2(ct, slot, i2c, **other_args):
-  bmp280 = BME280(i2c = i2c, address = 0x77)
+def handle_ct2(ct, slot, i2c_alt, **other_args):
+  bmp280 = BME280(i2c = i2c_alt, address = 0x77)
   (temp, pressure, _) = bmp280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m
   ct.pack(324, int(bmp280.altitude / 50))
@@ -293,16 +348,19 @@ def pack_ct2(ct, slot, i2c, **other_args):
   ct.pack_ct_header(slot)
 ```
 
-Here we are defining the function `pack_ct2`, which Nomad will
-call when we enable Custom Telemetry in the Setup Tool or in
-`config.json` (using the `ct_slots` setting). For slot 3, the
-function would be called `pack_ct3`.
+Here we are defining the function `handle_ct2`, which Nomad will
+call when we enable custom telemetry for slot 2 in the Setup Tool
+(or in `config.json` using the `ct_slots` setting). For slot 3, the
+function would be called `handle_ct3`.
 
-Nomad will pass us a Custom Telemetry object, `ct`, that we will
+Nomad will pass us a custom telemetry object, `ct`, that we will
 pack with BMP280 sensor values. We will also add a CT header at
 the end via `ct.pack_ct_header(slot)`. If we wanted to encode
 the message as extended telemetry (ET0) instead, we would
 terminate the message with `ct.pack_et0_header(slot, hdr_type = 0)`.
+
+Replace `i2c_alt` with `i2c` in the function signature if your
+sensor uses the same bus as si5351a.
 
 5\. Connect to the board using the setup tool.
    Upload the latest `nomad.py` from Github. **Uncheck** the
@@ -313,7 +371,7 @@ terminate the message with `ct.pack_et0_header(slot, hdr_type = 0)`.
 
 ### 5. Decoding the Data
 
-To parse and visualize your Custom Telemetry in WSPR TV,
+To parse and visualize your custom telemetry in WSPR TV,
 configure the CT Wizard as follows:
 
 <img src="images/img3.png" width=900>
@@ -322,7 +380,7 @@ The above template can be accessed
 [here](https://wsprtv.com/tools/ct_wizard.html?spec=https%3A%2F%2Fwsprtv.com%3Fband%3D20m%26ct_dec%3Dct%2Cs%3A2_120000%3A0%3A0.01%2C1000%3A-60%3A0.1%2C324%3A0%3A50%26ct_labels%3DB280Press%2CB280Temp%2CB280Alt%26ct_llabels%3DB280%2BPressure%2CB280%2BTemperature%2CBMP280%2BAltitude%26ct_units%3D%2BhPa%2CC%2C%2Bm%26ct_res%3D2%2C1).
 
 Note that fields are specified in the reverse order of packing.
-Click "Generate URL" to create your Custom Telemetry link for WSPR TV.
+Click "Generate URL" to create your custom telemetry link for WSPR TV.
 
 After you upload some test transmissions, you should be able to see your
 BMP280 values in the data view of WSPR TV:
