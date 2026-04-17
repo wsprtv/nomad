@@ -45,6 +45,8 @@ browser like Chrome, Edge, or Opera):
 
 1. Open the [Nomad Setup Tool](https://wsprtv.com/nomad/setup.html).
 2. Click **Connect to Device** and select your board from the popup.
+   On linux, you may need to add yourself to the `dialout` group if no
+   board is visible.
 3. Under *Firmware Installation*, click **Install Latest from GitHub** 
 (this automatically downloads `nomad.py` and saves it to your board as 
 `main.py`).
@@ -189,7 +191,7 @@ marginal increase in current consumption (a few mA).
 When you specify Custom Telemetry slots in the setup tool or in
 `config.json`, Nomad expects you to upload a separate file, `nomad_ct.py`,
 containing the code to handle each enabled slot. These functions
-are called `handle_ct2`, `handle_ct3`, etc. and are provided with the
+are called `handle_slot2`, `handle_slot3`, etc. and are provided with the
 following arguments:
 
 * **ct** - a CustomTelemetry object that you populate using the following
@@ -223,7 +225,7 @@ rest in `**other_args`. For example, if only `last_pos` is
 needed, you can define your function as follows:
 
 ```python
-def handle_ct2(ct, last_pos, **other_args):
+def handle_slot2(ct, last_pos, **other_args):
   # Pack last_pos to ct
 ```
 
@@ -336,7 +338,7 @@ We will be using slot 2.
 ```python
 from bme280_float import * 
 
-def handle_ct2(ct, slot, i2c_alt, **other_args):
+def handle_slot2(ct, slot, i2c_alt, **other_args):
   bmp280 = BME280(i2c = i2c_alt, address = 0x77)
   (temp, pressure, _) = bmp280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m
@@ -348,10 +350,9 @@ def handle_ct2(ct, slot, i2c_alt, **other_args):
   ct.pack_ct_header(slot)
 ```
 
-Here we are defining the function `handle_ct2`, which Nomad will
+Here we are defining the function `handle_slot2`, which Nomad will
 call when we enable custom telemetry for slot 2 in the Setup Tool
-(or in `config.json` using the `ct_slots` setting). For slot 3, the
-function would be called `handle_ct3`.
+(or in `config.json` using the `ct_slots` setting).
 
 Nomad will pass us a custom telemetry object, `ct`, that we will
 pack with BMP280 sensor values. We will also add a CT header at

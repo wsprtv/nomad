@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.004
+# Nomad: U4B-Protocol Tracker v1.005
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -76,7 +76,7 @@ class Tracker:
         if slot in self._ct_slots:
           self._wait_for_slot(slot)
           ct = CustomTelemetry()
-          if getattr(nomad_ct, f'handle_ct{slot}')(
+          if getattr(nomad_ct, f'handle_slot{slot}')(
               ct = ct, slot = slot, **self._get_ct_context()) in [True, None]:
             self._send(*self._encode_big_num(ct.value))
             continue
