@@ -1,0 +1,42 @@
+# Example: BMP280 in slot 2 — matches the (corrected) hand-written nomad_ct.py
+# from the Nomad docs. Regenerate encoder + decoder URL with:
+#   python3 nomad_ctgen.py bmp280_slot2.yaml
+
+version: 1
+
+sensors:
+  env:
+    driver: bmp280
+    bus: nomad      # reuse the tracker's own I2C bus
+    address: 0x77
+
+slots:
+  2:
+    header: ct
+    fields:
+      - name: B280Alt
+        long_label: BMP280 Altitude
+        source: env.altitude
+        unit: m
+        min: 0
+        max: 16150
+        resolution: 50
+
+      - name: B280Temp
+        long_label: BMP280 Temperature
+        source: env.temperature
+        unit: C
+        min: -60
+        max: 39.9
+        resolution: 0.1
+
+      - name: B280Press
+        long_label: BMP280 Pressure
+        source: env.pressure
+        unit: hPa
+        min: 0
+        max: 1199.99
+        resolution: 0.01
+
+# Optional: if set, the CT Wizard URL will pre-select this band.
+band: 20m
