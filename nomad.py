@@ -34,7 +34,7 @@ class Tracker:
     self._debug = debug
     self._read_config()
     global nomad_ct
-    if self._ct_slots: import nomad_ct
+    if self._enable_ct: import nomad_ct
     board = self._board
     self._watchdog = WDT(timeout = 8000) \
         if (not self._disable_watchdog and not self._debug) else None
@@ -73,11 +73,11 @@ class Tracker:
       self._wait_for_slot(0)
       self._send(self._callsign, self._get_grid()[:4])
       for slot in [1, 2, 3, 4]:
-        if slot in self._ct_slots:
-          self._wait_for_slot(slot)
+        if self._enable_ct:
           ct = CustomTelemetry()
-          if getattr(nomad_ct, f'handle_slot{slot}')(
-              ct = ct, slot = slot, **self._get_ct_context()) in [True, None]:
+          if (fn := getattr(nomad_ct, f'handle_slot{slot}', None)) and \
+              fn(ct = ct, slot = slot, **self._get_ct_context()) != False:
+            self._wait_for_slot(slot)
             self._send(*self._encode_big_num(ct.value))
             continue
         if slot == 1 and not self._disable_st:
@@ -139,8 +139,8 @@ class Tracker:
       time.sleep_ms(20)
 
   def _get_ct_context(self):
-    return { 'i2c': self._i2c, 'i2c_alt': self._i2c_alt,
-             'last_pos': self._last_pos, 'now': self._now() }
+    return { 'i2c': self._i2c, 'i2c_alt': self._i2c_alt, 'now': self._now(),
+             'tx_seq': self._get_tx_seq(), 'last_pos': self._last_pos }
 
   def _read_config(self):
     with open('config.json', 'r') as f:
@@ -170,7 +170,7 @@ class Tracker:
       self._disable_led = config.get('disable_led', False)
       self._disable_watchdog = config.get('disable_watchdog', False)
       self._geofenced_grids = config.get('geofenced_grids', [])
-      self._ct_slots = config.get('ct_slots', [])
+      self._enable_ct = config.get('enable_ct', False)
       self._board = BOARDS[config['board']]
 
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,

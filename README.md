@@ -129,9 +129,8 @@ or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
 * `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
 (approximately 3 dBm).
-* `"ct_slots"`: *(Array of Integers)* List of slots in which to send
-Custom Telemetry. Requires `nomad_ct.py` if not empty. Slot values
-should be between 1 and 4, where 0 is the regular callsign slot.
+* `"enable_ct"`: *(Boolean)* Set to `true` to enable Custom Telemetry
+as defined in the `nomad_ct.py` file.
 
 ## LED Status Indicators
 
@@ -205,9 +204,9 @@ functions:
   * `ct.pack_et0_header(hdr_type)` - used to terminate the message with an
     ET0 header instead. `hdr_type` should be 0 for USER_DEFINED.
 * **i2c** - the main i2c instance used by Nomad for communicating with
-  si5351a.
+  si5351a
 * **i2c_alt** - an alternate i2c instance that you may use for communicating
-  with sensors if they do not share si5351a's bus.
+  with sensors if they do not share si5351a's bus
 * **last_pos** - a GPS position object containing the following fields:
   * `ts` - timestamp, expressed as the number of seconds since epoch
   * `lat` - latitude (float, -90 - 90)
@@ -219,6 +218,8 @@ functions:
   * `pdop`, `hdop` and `vdop` - fix quality indicators
 * **now** - current GPS-derived time, expressed  as the number of seconds
   since epoch
+* **tx_seq** - a TX sequence number used by WSPR TV's
+  [temporal filters](https://wsprtv.com/docs/user_guide.html#temporal-filters)
 
 Your functions should only list the arguments they need, leaving the
 rest in `**other_args`. For example, if only `last_pos` is
@@ -350,15 +351,14 @@ def handle_slot2(ct, slot, i2c_alt, **other_args):
   ct.pack_ct_header(slot)
 ```
 
-Here we are defining the function `handle_slot2`, which Nomad will
-call when we enable custom telemetry for slot 2 in the Setup Tool
-(or in `config.json` using the `ct_slots` setting).
+Nomad will automatically load this file and call `handle_slot2`
+after we enable custom telemetry using the setup tool
+or via the `enable_ct` setting in `config.json`.
 
-Nomad will pass us a custom telemetry object, `ct`, that we will
-pack with BMP280 sensor values. We will also add a CT header at
-the end via `ct.pack_ct_header(slot)`. If we wanted to encode
-the message as extended telemetry (ET0) instead, we would
-terminate the message with `ct.pack_et0_header(slot, hdr_type = 0)`.
+In this example, we use the provided `ct` argument to return BMP280
+sensor values. We can encode the message either as Custom Telemetry
+or Extended Telemetry (ET0 USER_DEFINED), by adding the correct headers
+with`ct.pack_ct_header(slot)` or `ct.pack_et0_header(slot, hdr_type = 0)`. 
 
 Replace `i2c_alt` with `i2c` in the function signature if your
 sensor uses the same bus as si5351a.

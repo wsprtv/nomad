@@ -8,6 +8,8 @@
 import machine, onewire, ds18x20, time
 
 def handle_slot2(ct, slot, **other_args):
+  original_freq = machine.freq()
+  machine.freq(64000000)  # switch to higher freq for bitbanging
   data_pin = machine.Pin(26)
   ds_sensor = ds18x20.DS18X20(onewire.OneWire(data_pin))
   roms = ds_sensor.scan()
@@ -16,3 +18,4 @@ def handle_slot2(ct, slot, **other_args):
   temp = ds_sensor.read_temp(roms[0])
   ct.pack(2560, int((temp + 128) * 10))
   ct.pack_ct_header(slot)
+  machine.freq(original_freq)  # restore original freq

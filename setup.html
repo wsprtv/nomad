@@ -365,12 +365,10 @@
 
       { section: 'Custom Telemetry' },
 
-      { key: 'ct_slots', type: 'text',
-        label: 'Custom Telemetry Slots', required: false,
-        description: 'Comma-separated list of custom telemetry slots ' +
-          '(e.g. 2, 3). Requires nomad_ct.py if not empty. Slot values ' +
-          'should be between 1 and 4, where 0 is the regular callsign slot. ' +
-          'Sending CT in slots 1 and 4 is not recommended.' }
+      { key: 'enable_ct', type: 'checkbox',
+        label: 'Enable Custom Telemetry', required: false,
+        description: 'Check to enable Custom Telemetry definitions in ' +
+          'nomad_ct.py' }
     ];
 
     // DOM Elements
@@ -788,8 +786,7 @@ print('PING')`;
             if (item.placeholder !== undefined) {
               input.placeholder = item.placeholder;
             }
-            if ((item.key === 'geofenced_grids' ||
-                 item.key === 'ct_slots') && Array.isArray(val)) {
+            if (item.key === 'geofenced_grids' && Array.isArray(val)) {
               input.value = val.join(', ');
             } else {
               input.value = val !== undefined ? val : '';
@@ -863,11 +860,10 @@ print('PING')`;
           val = el.checked;
         } else if (item.type === 'number') {
           val = el.value !== "" ? parseFloat(el.value) : "";
-        } else if (item.key === 'geofenced_grids' || item.key === 'ct_slots') {
+        } else if (item.key === 'geofenced_grids') {
           if (el.value.trim() !== "") {
             val = el.value.split(',').map(s => s.trim())
                 .filter(s => s.length > 0);
-            if (item.key === 'ct_slots') val = val.map(s => Number(s));
           } else {
             val = "";
           }
