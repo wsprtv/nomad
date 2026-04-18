@@ -111,13 +111,19 @@ class Tracker:
     grid6 = self._get_grid()
     m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
         (int(self._last_pos.altitude) // 20) % 1068
-    self._last_voltage = ADC(self._board['vsys']).read_u16() * 3 * 3.3 / 65535
-    self._last_temp = \
-        int(27 - (ADC(4).read_u16() * 3.3 / 65535 - 0.706) / 0.001721)
-    n = ((self._last_temp + 50) % 90) * 6720 + \
-        (math.floor((self._last_voltage - 2) / 0.05) % 40) * 168 + \
+    n = ((self._get_temp() + 50) % 90) * 6720 + \
+        (math.floor((self._get_voltage() - 2) / 0.05) % 40) * 168 + \
         (int(self._last_pos.speed / 2) % 42) * 4 + 3
     return self._encode_big_num(m * 615600 + n)
+
+  def _get_voltage(self):
+    self._last_voltage = ADC(self._board['vsys']).read_u16() * 3 * 3.3 / 65535
+    return self._last_voltage
+
+  def _get_temp(self):
+    self._last_temp = \
+        int(27 - (ADC(4).read_u16() * 3.3 / 65535 - 0.706) / 0.001721)
+    return self._last_temp
 
   def _should_tx(self):
     return self._last_pos and self._now() - self._last_pos.ts < 120 and \
