@@ -1,9 +1,11 @@
+# BMP280 pressure / temperature sensor
 # Rename to nomad_ct.py before uploading
+#
 # Driver: https://github.com/robert-hh/BME280/blob/master/bme280_float.py
 #
 # WSPR TV CT params
 # (import into https://wsprtv.com/tools/ct_wizard.html to customize):
-# &ct_dec=ct,s:2_120000:0:0.01,1000:-60:0.1,324:0:50&ct_labels=B280Press,B280Temp,B280Alt&ct_llabels=B280+Pressure,B280+Temperature,BMP280+Altitude&ct_units=+hPa,C,+m
+# &ct_dec=ct,s:2_120000:0:0.01,1000:-60:0.1,324:0:50&ct_labels=B280Press,B280Temp,B280Alt&ct_llabels=B280+Pressure,B280+Temperature,B280+Altitude&ct_units=+hPa,C,+m
 
 from bme280_float import *
 

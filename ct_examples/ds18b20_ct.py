@@ -1,4 +1,6 @@
+# DS18B20 temperature sensor
 # Rename to nomad_ct.py before uploading
+#
 # Driver: built-in
 #
 # WSPR TV CT params

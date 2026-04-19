@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.005
+# Nomad: U4B-Protocol Tracker v1.006
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -46,7 +46,7 @@ class Tracker:
         if 'si5351a_switch' in board else None
     self._gps_vbat = Pin(board['gps_vbat'], Pin.OUT, value = 0) \
         if 'gps_vbat' in board else None
-    if 'gps_reset' in board: Pin(board['gps_reset'], Pin.OUT, value = 1)
+    if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
     time.sleep(2)
     if self._gps_vbat: self._gps_vbat.value(1)
     if self._led: self._led.value(0)
@@ -72,7 +72,7 @@ class Tracker:
         continue
       self._wait_for_slot(0)
       self._send(self._callsign, self._get_grid()[:4])
-      for slot in [1, 2, 3, 4]:
+      for slot in range(1, 5):
         if self._enable_ct:
           ct = CustomTelemetry()
           if (fn := getattr(nomad_ct, f'handle_slot{slot}', None)) and \
@@ -170,6 +170,7 @@ class Tracker:
       self._disable_led = config.get('disable_led', False)
       self._disable_watchdog = config.get('disable_watchdog', False)
       self._geofenced_grids = config.get('geofenced_grids', [])
+      self._minimize_gps_use = config.get('minimize_gps_use', False)
       self._enable_ct = config.get('enable_ct', False)
       self._board = BOARDS[config['board']]
 
@@ -194,7 +195,7 @@ class Tracker:
           if self._ttff == None: self._ttff = time.time() - start_time
           num_fixes += 1
         if sentence[3:6] == 'RMC':
-          if self._led: self._led.value(self._last_pos == None)
+          if self._led: self._led.value(self._ttff == None)
           led_toggle_ticks = time.ticks_add(time.ticks_ms(), 50)
       else:
         time.sleep_ms(10)
@@ -204,7 +205,7 @@ class Tracker:
         led_toggle_ticks = None
       if time.time() - start_time > max_time: break
       if num_fixes >= min_num_fixes:
-        if exit_minute == None: break
+        if exit_minute == None or self._minimize_gps_use: break
         if self._gps_time_offset:
           ts = time.gmtime(time.time() + self._gps_time_offset)
           if (ts[4] % 10 == (exit_minute - 1) % 10) and ts[5] >= 57: break

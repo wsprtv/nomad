@@ -45,8 +45,8 @@ browser like Chrome, Edge, or Opera):
 
 1. Open the [Nomad Setup Tool](https://wsprtv.com/nomad/setup.html).
 2. Click **Connect to Device** and select your board from the popup.
-   On linux, you may need to add yourself to the `dialout` group if no
-   board is visible.
+   On linux, you may need to add yourself to the `dialout` group
+   and reboot if no board is visible.
 3. Under *Firmware Installation*, click **Install Latest from GitHub** 
 (this automatically downloads `nomad.py` and saves it to your board as 
 `main.py`).
@@ -110,7 +110,7 @@ specific hardware).
 * `"min_hp_elev"`: *(Integer)* Uses 10 dBm TX mode when solar elevation 
 is under this threshold (in degrees). Uses 13 dBm otherwise.
 * `"min_uhp_elev"`: *(Integer)* Uses 15 dBm TX mode when solar elevation 
-is above this threshold (in degrees). Requires hardware modifications to
+is above this threshold (in degrees). Requires hardware modification to
 existing boards.
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
@@ -129,6 +129,8 @@ or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
 * `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
 (approximately 3 dBm).
+* `"minimize_gps_use"`: *(Boolean)* Set to `true` to turn GPS off whenever 
+possible, to save power (useful for battery operation).
 * `"enable_ct"`: *(Boolean)* Set to `true` to enable Custom Telemetry
 as defined in the `nomad_ct.py` file.
 
@@ -187,7 +189,7 @@ marginal increase in current consumption (a few mA).
 
 ## Custom Telemetry
 
-When you specify Custom Telemetry slots in the setup tool or in
+When you enable Custom Telemetry in the setup tool or in
 `config.json`, Nomad expects you to upload a separate file, `nomad_ct.py`,
 containing the code to handle each enabled slot. These functions
 are called `handle_slot2`, `handle_slot3`, etc. and are provided with the
