@@ -21,7 +21,7 @@ def handle_slot2(ct, slot, last_pos, now, **other_args):
     if size != required_size:
       with open(FILENAME, 'wb') as f: f.write(b'\x00' * required_size)
     # Go through the log and find the oldest entry, as well as entries that
-    # are 6, 12, and 18 hours before now - NUM_DAYS
+    # are 6, 12, and 18 hours after NUM_DAYS ago
     oldest_offset = None
     oldest_cycle = None
     candidate_entries = []
