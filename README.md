@@ -22,6 +22,7 @@ Nomad currently has built-in support for the following tracker boards:
 * `devel` (specify your own pin connections)
 * [jawbone](https://github.com/EngineerGuy314/JAWBONE)
 * [traquito](https://traquito.github.io)
+* [traquito2](https://traquito.github.io) (Jetpack with a Pico 2 board)
 
 ## Installation
 
@@ -30,7 +31,8 @@ First, install the MicroPython firmware onto your board:
 
 1. Download the latest `.uf2` file for your specific microcontroller from 
 the [MicroPython Downloads page](https://micropython.org/download/) 
-(e.g., [Pico](https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2)).
+(e.g., [Pico](https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2),
+[Pico 2](https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2).
 2. Put your board into BOOTSEL mode (hold the BOOT button while plugging 
 it into USB).
 3. Drag and drop the downloaded `.uf2` file onto the mounted USB mass 
@@ -104,7 +106,7 @@ a minimal configuration example:
 * `"xo_freq"`: The frequency of your crystal (adjust according to your 
 specific hardware).
 * `"board"`: The target hardware. Must be one of `"ag6ns"`, `"devel"`,
-`"jawbone"`, or `"traquito"`.
+`"jawbone"`, `"traquito"`, or `"traquito2"` (Jetpack with a Pico 2 board).
 
 **Optional:**
 * `"min_hp_elev"`: *(Integer)* Uses 10 dBm TX mode when solar elevation 
@@ -205,10 +207,6 @@ functions:
     called last.
   * `ct.pack_et0_header(hdr_type)` - used to terminate the message with an
     ET0 header instead. `hdr_type` should be 0 for USER_DEFINED.
-* **i2c** - the main i2c instance used by Nomad for communicating with
-  si5351a
-* **i2c_alt** - an alternate i2c instance that you may use for communicating
-  with sensors if they do not share si5351a's bus
 * **last_pos** - a GPS position object containing the following fields:
   * `ts` - timestamp, expressed as the number of seconds since epoch
   * `lat` - latitude (float, -90 - 90)
@@ -285,7 +283,7 @@ driver.
 Before modifying the transmission sequence, verify that the sensor is
 communicating properly. Scroll down to the terminal section of the setup tool.
 
-If you are using a custom I2C bus for the sensor, initialize it manually:
+Create an I2C instance for the sensor:
 
 ```python
 from machine import I2C, Pin
@@ -295,22 +293,6 @@ i2c = I2C(<i2c_peripheral>, scl = Pin(<scl_pin>), sda = Pin(<sda_pin>),
 
 *(Replace `<i2c_peripheral>`, `<scl_pin>`, and `<sda_pin>` with the correct
 integer values for your board's connections).*
-
-**Alternative: Using Nomad's I2C Instances**
-
-In many cases, you can leverage Nomad's existing I2C configuration:
-
-1. Use the setup tool to install the latest Nomad firmware
-2. Run the following in the terminal to grab Nomad's I2C instance:
-
-```python
-from main import *
-tracker = Tracker(debug = 1)
-# using the alternate i2c bus
-i2c = tracker._i2c_alt
-# or if using the same bus as si5351a
-# i2c = tracker._i2c
-```
 
 **Reading the Data**
 
@@ -339,10 +321,12 @@ We will be using slot 2.
    content:
 
 ```python
+from machine import I2C, Pin
 from bme280_float import * 
 
-def handle_slot2(ct, slot, i2c_alt, **other_args):
-  bmp280 = BME280(i2c = i2c_alt, address = 0x77)
+def handle_slot2(ct, slot, **other_args):
+  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  bmp280 = BME280(i2c = i2c, address = 0x77)
   (temp, pressure, _) = bmp280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m
   ct.pack(324, int(bmp280.altitude / 50))
@@ -361,9 +345,6 @@ In this example, we use the provided `ct` argument to return BMP280
 sensor values. We can encode the message either as Custom Telemetry
 or Extended Telemetry (ET0 USER_DEFINED), by adding the correct headers
 with`ct.pack_ct_header(slot)` or `ct.pack_et0_header(slot, hdr_type = 0)`. 
-
-Replace `i2c_alt` with `i2c` in the function signature if your
-sensor uses the same bus as si5351a.
 
 5\. Connect to the board using the setup tool.
    Upload the latest `nomad.py` from Github. **Uncheck** the

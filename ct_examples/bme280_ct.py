@@ -7,9 +7,11 @@
 # (import into https://wsprtv.com/tools/ct_wizard.html to customize):
 # &ct_dec=ct,s:2_1200:0:1,1000:-60:0.1,100:0:1,324:0:50&ct_labels=B280Press,B280Temp,B280Hum,B280Alt&ct_llabels=B280+Pressure,B280+Temperature,B280+Humidity,B280+Altitude&ct_units=+hPa,C,+pct,+m
 
+from machine import I2C, Pin
 from bme280_float import *
 
-def handle_slot2(ct, slot, i2c_alt, **other_args):
+def handle_slot2(ct, slot, **other_args):
+  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
   bme280 = BME280(i2c = i2c_alt, address = 0x77)
   (temp, pressure, humidity) = bme280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m

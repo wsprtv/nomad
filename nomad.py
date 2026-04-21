@@ -1,34 +1,35 @@
-# Nomad: U4B-Protocol Tracker v1.006
+# Nomad: U4B-Protocol Tracker v1.007
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
 import json, machine, math, time
 from machine import ADC, I2C, Pin, UART, WDT
 
-WSPR_BANDS = {  # [start_minute_offset, start_freq]
-  '2200m': [0, 137400], '630m': [4, 475600], '160m': [8, 1838000],
-  '80m': [2, 3570000], '60m': [6, 5288600], '40m': [0, 7040000],
-  '30m': [4, 10140100], '20m': [8, 14097000], '17m': [2, 18106000],
-  '15m': [6, 21096000], '12m': [0, 24926000], '10m': [4, 28126000],
-  '6m': [8, 50294400] }
-
-BOARDS = {
-  'ag6ns': { 'i2c': { 'id': 0, 'scl': 13, 'sda': 12 },
-    'i2c_alt': { 'id': 1, 'scl': 3, 'sda': 2 },
-    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 16,
-    'gps_reset': 5, 'si5351a_switch': 4, 'led': 25, 'vsys': 29 },
-  'devel': { 'i2c': { 'id': 0, 'scl': 21, 'sda': 20 },
-    'gps_uart': 0, 'gps_tx': 0, 'gps_rx': 1, 'gps_switch': 10,
-    'gps_vbat': 5, 'si5351a_switch': 22, 'led': 25, 'vsys': 29 },
-  'jawbone': { 'i2c': { 'id': 0, 'scl': 1, 'sda': 0 },
-    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 11,
-    'si5351a_switch': 18, 'led': 25, 'vsys': 29 },
-  'traquito': { 'i2c': { 'id': 0, 'scl': 5, 'sda': 4 },
-    'i2c_alt': { 'id': 1, 'scl': 15, 'sda': 14 },
-    'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
-    'gps_vbat': 3, 'si5351a_switch': 28, 'led': 25, 'vsys': 29 } }
-
 class Tracker:
+  WSPR_BANDS = {  # [start_minute_offset, start_freq]
+    '2200m': [0, 137400], '630m': [4, 475600], '160m': [8, 1838000],
+    '80m': [2, 3570000], '60m': [6, 5288600], '40m': [0, 7040000],
+    '30m': [4, 10140100], '20m': [8, 14097000], '17m': [2, 18106000],
+    '15m': [6, 21096000], '12m': [0, 24926000], '10m': [4, 28126000],
+    '6m': [8, 50294400] }
+
+  BOARDS = {
+    'ag6ns': { 'vfo_i2c': 0, 'vfo_scl': 13, 'vfo_sda': 12, 'vfo_switch': 4,
+      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 16,
+      'gps_reset': 5, 'led': 25, 'uc': 'RP2040' },
+    'devel': { 'vfo_i2c': 0, 'vfo_scl': 21, 'vfo_sda': 20, 'vfo_switch': 22,
+      'gps_uart': 0, 'gps_tx': 0, 'gps_rx': 1, 'gps_switch': 10, 'gps_vbat': 5,
+      'led': 25, 'uc': 'RP2040' },
+    'jawbone': { 'vfo_i2c': 0, 'vfo_scl': 1, 'vfo_sda': 0, 'vfo_switch': 18,
+      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 11,
+      'led': 25, 'uc': 'RP2040' },
+    'traquito': { 'vfo_i2c': 0, 'vfo_scl': 5, 'vfo_sda': 4, 'vfo_switch': 28,
+      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
+      'gps_vbat': 3, 'led': 25, 'uc': 'RP2040' },
+    'traquito2': { 'vfo_i2c': 0, 'vfo_scl': 5, 'vfo_sda': 4, 'vfo_switch': 28,
+      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
+      'gps_vbat': 3, 'led': 25, 'uc': 'RP2350' } }
+
   def __init__(self, debug = False):
     self._initial_time_offset = time.time()
     self._debug = debug
@@ -42,23 +43,15 @@ class Tracker:
         if not self._disable_led else None
     self._gps_switch = Pin(board['gps_switch'], Pin.OUT, value = 1) \
         if 'gps_switch' in board else None
-    self._si5351a_switch = Pin(board['si5351a_switch'], Pin.OUT, value = 1) \
-        if 'si5351a_switch' in board else None
+    self._vfo_switch = Pin(board['vfo_switch'], Pin.OUT, value = 1) \
+        if 'vfo_switch' in board else None
     self._gps_vbat = Pin(board['gps_vbat'], Pin.OUT, value = 0) \
         if 'gps_vbat' in board else None
     if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
     time.sleep(2)
     if self._gps_vbat: self._gps_vbat.value(1)
     if self._led: self._led.value(0)
-    if machine.mem32[0x50110050] & (1 << 16):
-      machine.freq(48000000)  # USB connected
-    else:
-      machine.freq(18000000)
-    self._i2c = I2C(board['i2c']['id'], scl = Pin(board['i2c']['scl']),
-        sda = Pin(board['i2c']['sda']), freq = 100000)
-    self._i2c_alt = I2C(board['i2c_alt']['id'],
-        scl = Pin(board['i2c_alt']['scl']), sda = Pin(board['i2c_alt']['sda']),
-        freq = 100000) if board['i2c_alt'] else None
+    self._uc = globals()[board['uc']]()
     self._last_pos = None
     self._num_tx = 0
     self._num_skipped_tx = 0
@@ -109,21 +102,14 @@ class Tracker:
 
   def _encode_st(self):
     grid6 = self._get_grid()
+    self._last_temp = self._uc.get_temp()
+    self._last_voltage = self._uc.get_voltage()
     m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
         (int(self._last_pos.altitude) // 20) % 1068
-    n = ((self._get_temp() + 50) % 90) * 6720 + \
-        (math.floor((self._get_voltage() - 2) / 0.05) % 40) * 168 + \
+    n = ((self._last_temp + 50) % 90) * 6720 + \
+        (math.floor((self._last_voltage - 2) / 0.05) % 40) * 168 + \
         (int(self._last_pos.speed / 2) % 42) * 4 + 3
     return self._encode_big_num(m * 615600 + n)
-
-  def _get_voltage(self):
-    self._last_voltage = ADC(self._board['vsys']).read_u16() * 3 * 3.3 / 65535
-    return self._last_voltage
-
-  def _get_temp(self):
-    self._last_temp = \
-        int(27 - (ADC(4).read_u16() * 3.3 / 65535 - 0.706) / 0.001721)
-    return self._last_temp
 
   def _should_tx(self):
     return self._last_pos and self._now() - self._last_pos.ts < 120 and \
@@ -136,26 +122,26 @@ class Tracker:
       t = time.gmtime(self._now())
       if t[4] % 10 == (self._start_minute + slot * 2) % 10 and t[5] < 2:
         break
-      time.sleep_ms(20)
+      time.sleep_ms(100)
 
   def _get_ct_context(self):
-    return { 'i2c': self._i2c, 'i2c_alt': self._i2c_alt, 'now': self._now(),
-             'tx_seq': self._get_tx_seq(), 'last_pos': self._last_pos }
+    return { 'now': self._now(), 'tx_seq': self._get_tx_seq(),
+             'last_pos': self._last_pos }
 
   def _read_config(self):
     with open('config.json', 'r') as f:
       config = json.load(f)
       self._callsign = config['callsign'].upper()
-      if len(self._callsign) not in [4, 5, 6] or \
+      if len(self._callsign) not in range(4, 7) or \
           not all((c.isdigit() or (c.isalpha() and c.isupper()))
                   for c in self._callsign): raise Exception
       self._channel = int(config['channel'])
       if self._channel < 0 or self._channel > 599: raise Exception
       self._band = config['band'].lower()
-      if not self._band in WSPR_BANDS: raise Exception
+      if not self._band in self.WSPR_BANDS: raise Exception
       self._start_minute = \
-          (WSPR_BANDS[self._band][0] + (self._channel % 5) * 2) % 10
-      self._freq = WSPR_BANDS[self._band][1] + \
+          (self.WSPR_BANDS[self._band][0] + (self._channel % 5) * 2) % 10
+      self._freq = self.WSPR_BANDS[self._band][1] + \
           [20, 60, 140, 180][(self._channel % 20) // 5]
       self._xo_freq = int(config['xo_freq'])
       self._cs1 = ['0', '1', 'Q'][self._channel // 200]
@@ -172,7 +158,7 @@ class Tracker:
       self._geofenced_grids = config.get('geofenced_grids', [])
       self._minimize_gps_use = config.get('minimize_gps_use', False)
       self._enable_ct = config.get('enable_ct', False)
-      self._board = BOARDS[config['board']]
+      self._board = self.BOARDS[config['board']]
 
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,
                            exit_minute = None):
@@ -198,7 +184,7 @@ class Tracker:
           if self._led: self._led.value(self._ttff == None)
           led_toggle_ticks = time.ticks_add(time.ticks_ms(), 50)
       else:
-        time.sleep_ms(10)
+        time.sleep_ms(20)
       if led_toggle_ticks != None and \
           time.ticks_diff(time.ticks_ms(), led_toggle_ticks) > 0:
         if self._led: self._led.toggle()
@@ -268,9 +254,11 @@ class Tracker:
 
   def _send(self, cs, grid, power = None):
     if self._led: self._led.value(1)
-    if self._si5351a_switch: self._si5351a_switch.value(0)  # on
+    if self._vfo_switch: self._vfo_switch.value(0)  # on
     time.sleep_ms(250)
-    transmitter = WSPRTransmitter(self._i2c, self._watchdog, self._xo_freq)
+    i2c = I2C(self._board['vfo_i2c'], scl = Pin(self._board['vfo_scl']),
+        sda = Pin(self._board['vfo_sda']), freq = 100000)
+    transmitter = WSPRTransmitter(i2c, self._watchdog, self._xo_freq)
     solar_elev = self._get_solar_elevation() if self._last_pos else 0
     output_power = 0 if self._force_lp_tx else 1
     if self._num_tx >= self._num_initial_mp_tx:
@@ -278,7 +266,9 @@ class Tracker:
       elif solar_elev > self._min_hp_elev: output_power = 2
     if power == None: power = [3, 10, 13, 17][output_power]
     transmitter.send(self._freq, output_power, cs, grid, power)
-    if self._si5351a_switch: self._si5351a_switch.value(1)  # off
+    Pin(self._board['vfo_scl'], Pin.IN)
+    Pin(self._board['vfo_sda'], Pin.IN)
+    if self._vfo_switch: self._vfo_switch.value(1)  # off
     if self._led: self._led.value(0)
 
   def _get_grid(self):
@@ -390,7 +380,7 @@ class WSPRTransmitter:
     return True
 
   def _initialize(self, output_power):
-    # Wait for si5351a to start up
+    # Wait for vfo to start up
     while self._i2c.readfrom_mem(0x60, 0x00, 1)[0] & 0x80: pass
     self._disable_outputs()
     drive = [0, 3][output_power > 0]
@@ -513,6 +503,31 @@ class WSPRTransmitter:
     for i in range(162):
       symbols[i] = symbols[i] * 2 + ((sync[i >> 5] >> (i & 31)) & 1)
     return symbols
+
+class RP2040:
+  def __init__(self):
+    if machine.mem32[0x50110050] & (1 << 16):
+      machine.freq(48000000)  # USB connected
+    else:
+      machine.freq(18000000)
+      # Disable unused peripherals in sleep mode
+      machine.mem32[0x4000b0a8] = ~0x200000
+      machine.mem32[0x4000b0ac] = ~0x13e0
+
+  def get_voltage(self):
+    v = sum([ADC(29).read_u16() for i in range(40)][-10:]) / 10
+    return v * 3 * 3.3 / 65535
+
+  def get_temp(self):
+    v = sum([ADC(4).read_u16() for i in range(40)][-10:]) / 10
+    return int(29 - (v * 3.3 / 65535 - 0.706) / 0.001721)
+
+class RP2350(RP2040):
+  def __init_(self):
+    if machine.mem32[0x40038010] & (3 << 10):
+      machine.freq(48000000)  # USB connected
+    else:
+      machine.freq(18000000)
 
 if __name__ == '__main__':
   try:
