@@ -32,7 +32,7 @@ First, install the MicroPython firmware onto your board:
 1. Download the latest `.uf2` file for your specific microcontroller from 
 the [MicroPython Downloads page](https://micropython.org/download/) 
 (e.g., [Pico](https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2),
-[Pico 2](https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2).
+[Pico 2](https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2)).
 2. Put your board into BOOTSEL mode (hold the BOOT button while plugging 
 it into USB).
 3. Drag and drop the downloaded `.uf2` file onto the mounted USB mass 
