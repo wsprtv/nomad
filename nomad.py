@@ -180,7 +180,7 @@ class Tracker:
         now = self._get_time()
         if (now % 60) >= 58 and ((now + 2) % 600) // 60 == exit_minute: break
     if (not self._last_pos and self._uptime() > 1800) or \
-       (self._last_pos and now - self._last_pos.ts > 1800):
+       (self._last_pos and self._get_time() - self._last_pos.ts > 1800):
       # No GPS fix in 30 minutes, try resetting
       machine.reset()
     self._stop_gps()
