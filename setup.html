@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- (C) 2026 WSPR TV authors -->
-  <!-- https://wsprtv.com/nomad -->
-  <!-- License: AGPL 3.0 -->
+  <!-- (C) 2026 WSPR TV authors
+    https://wsprtv.com/nomad
+    License: AGPL 3.0 -->
   <title>Nomad Setup</title>
   <style>
     html, body {
@@ -101,6 +101,7 @@
     }
     a {
       display: inline-block;
+      color: #4444cc;
       max-width: 1000px;
       word-break: break-all;
       overflow-wrap: anywhere;
@@ -230,16 +231,23 @@
         disabled>Disconnect</button>
       <p class="info_text">
         <strong>MicroPython Required:</strong> Ensure MicroPython is
-        installed before connecting. To install, hold the
-        BOOTSEL button while plugging your board into
-        USB. Then, drag and drop the MicroPython UF2 file (e.g. <a
+        installed before connecting. To install on Pico-based trackers, hold
+        the BOOTSEL button while plugging your board into
+        USB. Then, drag and drop the MicroPython UF2 file (<a
         href="https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2"
-        target="_blank" style="color: #4444cc;">this version for Pico</a>)
-        onto the drive that appears.
+        target="_blank">Pico / RP2040</a>, <a
+        href="https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2"
+        target="_blank">Pico 2 / RP2350</a>)
+        onto the drive that appears. On ESP32 C3-based boards, flash the <a
+        href="https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin"
+        target="_blank">MicroPython binary</a>
+        using the online <a href="https://espressif.github.io/esptool-js/"
+        target="_blank">ESP tool</a>
+        (set the flash address to 0).
         <br><br>
         For additional instructions, see <a
         href="https://github.com/wsprtv/nomad" target="_blank"
-        style="color: #4444cc;">Nomad's github page</a>.
+        >Nomad's github page</a>.
       </p>
     </div>
     <div id="dependent_ui">
@@ -320,7 +328,8 @@
           'The frequency of your crystal (adjust according to your ' +
           'specific hardware).' },
       { key: 'board', type: 'select', label: 'Board Type', required: true,
-        options: ['ag6ns', 'devel', 'jawbone', 'traquito', 'traquito2'],
+        options: ['ag6ns', 'devel_rp2040', 'devel_esp32c3', 'jawbone',
+                  'traquito', 'traquito2'],
         description: 'The target hardware you are running this on.' },
 
       { section: 'Optional Settings' },
@@ -365,6 +374,16 @@
       { key: 'minimize_gps_use', type: 'checkbox', label: 'Minimize GPS Use',
         required: false, description:
           'Power off GPS whenever possible (useful for battery operation).' },
+      { key: 'temp_offset', type: 'number',
+        label: 'Temperature Offset', placeholder: 0,
+        required: false, description:
+            'Temperature sensor correction in degrees C. A positive ' +
+            'offset increases the reported temperature.' },
+      { key: 'voltage_cal', type: 'number',
+        label: 'Voltage Calibration', placeholder: '1.00',
+        required: false, step: 0.01, description:
+            'Voltage calibration factor. Set to > 1.0 to increase ' +
+            'the reported voltage.' },
 
       { section: 'Custom Telemetry' },
 
@@ -417,23 +436,25 @@
     // Connect to the serial port and verify MicroPython presence
     async function connect() {
       try {
-        const rp_vendor_id = 0x2e8a;
-        const mp_product_id = 0x0005;
+        const supported_devices = [
+          { usbVendorId: 0x2e8a, usbProductId: 0x0005 },  // Pico
+          { usbVendorId: 0x303a, usbProductId: 0x1001 }   // ESP32
+        ];
 
         // 1. Check if we already have permission for a connected Pico
         const existing_ports = await navigator.serial.getPorts();
         port = existing_ports.find(p => {
           const info = p.getInfo();
-          return info.usbVendorId === rp_vendor_id &&
-              info.usbProductId === mp_product_id;
+          return supported_devices.some(device =>
+              device.usbVendorId === info.usbVendorId &&
+              device.usbProductId === info.usbProductId);
         });
 
         // 2. If no authorized port is found, prompt the user with a
         // filtered list
         if (!port) {
           port = await navigator.serial.requestPort({ 
-            filters: [{ usbVendorId: rp_vendor_id,
-                        usbProductId: mp_product_id }]
+            filters: supported_devices
           });
         }
         await port.open({ baudRate: 115200 });
@@ -476,6 +497,13 @@ try:
             machine.mem32[0x40058000] = 0
         elif 'RP2350' in os.uname().machine:
             machine.mem32[0x400d8000] = 0
+    elif sys.platform == 'esp32':
+        machine.mem32[0x600080a8] = 0x50d83aa1
+        machine.mem32[0x60008090] &= ~(1 << 31)
+        machine.mem32[0x600080a8] = 0
+        machine.mem32[0x6001f064] = 0x50d83aa1
+        machine.mem32[0x6001f048] &= ~(1 << 31)
+        machine.mem32[0x6001f064] = 0
 except:
     pass
 print('PING')`;
@@ -788,6 +816,9 @@ print('PING')`;
             input.id = `cfg_${item.key}`;
             if (item.placeholder !== undefined) {
               input.placeholder = item.placeholder;
+            }
+            if (item.step !== undefined) {
+              input.step = item.step;
             }
             if (item.key === 'geofenced_grids' && Array.isArray(val)) {
               input.value = val.join(', ');

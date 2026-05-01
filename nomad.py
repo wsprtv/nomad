@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.007
+# Nomad: U4B-Protocol Tracker v1.008
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -6,51 +6,25 @@ import json, machine, math, time
 from machine import ADC, I2C, Pin, UART, WDT
 
 class Tracker:
-  WSPR_BANDS = {  # [start_minute_offset, start_freq]
-    '2200m': [0, 137400], '630m': [4, 475600], '160m': [8, 1838000],
-    '80m': [2, 3570000], '60m': [6, 5288600], '40m': [0, 7040000],
-    '30m': [4, 10140100], '20m': [8, 14097000], '17m': [2, 18106000],
-    '15m': [6, 21096000], '12m': [0, 24926000], '10m': [4, 28126000],
-    '6m': [8, 50294400] }
-
-  BOARDS = {
-    'ag6ns': { 'vfo_i2c': 0, 'vfo_scl': 13, 'vfo_sda': 12, 'vfo_switch': 4,
-      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 16,
-      'gps_reset': 5, 'led': 25, 'uc': 'RP2040' },
-    'devel': { 'vfo_i2c': 0, 'vfo_scl': 21, 'vfo_sda': 20, 'vfo_switch': 22,
-      'gps_uart': 0, 'gps_tx': 0, 'gps_rx': 1, 'gps_switch': 10, 'gps_vbat': 5,
-      'led': 25, 'uc': 'RP2040' },
-    'jawbone': { 'vfo_i2c': 0, 'vfo_scl': 1, 'vfo_sda': 0, 'vfo_switch': 18,
-      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 11,
-      'led': 25, 'uc': 'RP2040' },
-    'traquito': { 'vfo_i2c': 0, 'vfo_scl': 5, 'vfo_sda': 4, 'vfo_switch': 28,
-      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
-      'gps_vbat': 3, 'led': 25, 'uc': 'RP2040' },
-    'traquito2': { 'vfo_i2c': 0, 'vfo_scl': 5, 'vfo_sda': 4, 'vfo_switch': 28,
-      'gps_uart': 1, 'gps_tx': 8, 'gps_rx': 9, 'gps_switch': 2, 'gps_reset': 6,
-      'gps_vbat': 3, 'led': 25, 'uc': 'RP2350' } }
-
   def __init__(self, debug = False):
     self._initial_time_offset = time.time()
     self._debug = debug
     self._read_config()
     global nomad_ct
     if self._enable_ct: import nomad_ct
-    board = self._board
     self._watchdog = WDT(timeout = 8000) \
         if (not self._disable_watchdog and not self._debug) else None
-    self._led = Pin(board['led'], Pin.OUT, value = 1) \
-        if not self._disable_led else None
-    self._gps_switch = Pin(board['gps_switch'], Pin.OUT, value = 1) \
-        if 'gps_switch' in board else None
-    self._vfo_switch = Pin(board['vfo_switch'], Pin.OUT, value = 1) \
-        if 'vfo_switch' in board else None
-    self._gps_vbat = Pin(board['gps_vbat'], Pin.OUT, value = 0) \
-        if 'gps_vbat' in board else None
+    board = self._board
+    self._led = Switch(*board.get('led', []), value = 1) \
+        if not self._disable_led else Switch()
+    self._gps_pwr = Switch(*board.get('gps_pwr', []), value = 0)
+    self._vfo_pwr = Switch(*board.get('vfo_pwr', []), value = 0)
+    gps_vbat = Switch(*board.get('gps_vbat', []), value = 0)
     if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
+    Pin(self._board['vsys'][0], Pin.IN)
     time.sleep(2)
-    if self._gps_vbat: self._gps_vbat.value(1)
-    if self._led: self._led.value(0)
+    gps_vbat.value(1)
+    self._led.value(0)
     self._uc = globals()[board['uc']]()
     self._last_pos = None
     self._num_tx = 0
@@ -60,19 +34,21 @@ class Tracker:
     self._reset_gps()
     while True:
       self._update_gps_position(exit_minute = self._start_minute)
+      self._wait_for_slot(0)
       if not self._should_tx():
         self._num_skipped_tx += 1
         continue
-      self._wait_for_slot(0)
-      self._send(self._callsign, self._get_grid()[:4])
-      for slot in range(1, 5):
+      for slot in range(0, 5):
         if self._enable_ct:
           ct = CustomTelemetry()
           if (fn := getattr(nomad_ct, f'handle_slot{slot}', None)) and \
               fn(ct = ct, slot = slot, **self._get_ct_context()) != False:
-            self._wait_for_slot(slot)
-            self._send(*self._encode_big_num(ct.value))
+            if ct.value != None:
+              if slot != 0: self._wait_for_slot(slot)
+              self._send(*self._encode_big_num(ct.value))
             continue
+        if slot == 0:
+          self._send(self._callsign, self._get_grid()[:4])
         if slot == 1 and not self._disable_st:
           self._wait_for_slot(1)
           self._send(*self._encode_st())
@@ -84,7 +60,7 @@ class Tracker:
   def _encode_enhanced_st(self, slot):
     ct = CustomTelemetry()
     pos = self._last_pos
-    if (self._get_tx_seq() // 5) % 2 == 0:
+    if ((self._get_time() - slot * 120) // 600) % 2 == 0:
       ct.pack(330, self._num_tx)
     else:
       ct.pack(22, min(self._ttff // 5, 21))
@@ -102,8 +78,8 @@ class Tracker:
 
   def _encode_st(self):
     grid6 = self._get_grid()
-    self._last_temp = self._uc.get_temp()
-    self._last_voltage = self._uc.get_voltage()
+    self._last_temp = self._get_temp()
+    self._last_voltage = self._get_voltage()
     m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
         (int(self._last_pos.altitude) // 20) % 1068
     n = ((self._last_temp + 50) % 90) * 6720 + \
@@ -111,22 +87,29 @@ class Tracker:
         (int(self._last_pos.speed / 2) % 42) * 4 + 3
     return self._encode_big_num(m * 615600 + n)
 
+  def _get_temp(self):
+    return self._uc.get_temp() + self._temp_offset
+
+  def _get_voltage(self):
+    return self._uc.get_voltage(*self._board['vsys']) * self._voltage_cal
+
   def _should_tx(self):
-    return self._last_pos and self._now() - self._last_pos.ts < 120 and \
+    return self._last_pos and self._get_time() - self._last_pos.ts < 600 and \
         (self._num_tx + self._num_skipped_tx) % self._tx_interval == 0 and \
         not self._is_geofenced(self._get_grid())
 
   def _wait_for_slot(self, slot):
     while True:
       if self._watchdog: self._watchdog.feed()
-      t = time.gmtime(self._now())
-      if t[4] % 10 == (self._start_minute + slot * 2) % 10 and t[5] < 2:
-        break
+      now = self._get_time()
+      slot_minute = (self._start_minute + slot * 2) % 10
+      if now % 60 < 2 and (now % 600) // 60 == slot_minute: break
       time.sleep_ms(100)
 
   def _get_ct_context(self):
-    return { 'now': self._now(), 'tx_seq': self._get_tx_seq(),
-             'last_pos': self._last_pos }
+    return { 'last_pos': self._last_pos, 'get_time': self._get_time,
+             'get_voltage': self._get_voltage, 'get_temp': self._get_temp,
+             'watchdog': self._watchdog }
 
   def _read_config(self):
     with open('config.json', 'r') as f:
@@ -158,6 +141,8 @@ class Tracker:
       self._geofenced_grids = config.get('geofenced_grids', [])
       self._minimize_gps_use = config.get('minimize_gps_use', False)
       self._enable_ct = config.get('enable_ct', False)
+      self._temp_offset = config.get('temp_offset', 0)
+      self._voltage_cal = config.get('voltage_cal', 1)
       self._board = self.BOARDS[config['board']]
 
   def _update_gps_position(self, max_time = 999, min_num_fixes = 5,
@@ -181,41 +166,40 @@ class Tracker:
           if self._ttff == None: self._ttff = time.time() - start_time
           num_fixes += 1
         if sentence[3:6] == 'RMC':
-          if self._led: self._led.value(self._ttff == None)
+          self._led.value(self._ttff == None)
           led_toggle_ticks = time.ticks_add(time.ticks_ms(), 50)
       else:
         time.sleep_ms(20)
       if led_toggle_ticks != None and \
           time.ticks_diff(time.ticks_ms(), led_toggle_ticks) > 0:
-        if self._led: self._led.toggle()
+        self._led.value(self._ttff != None)
         led_toggle_ticks = None
       if time.time() - start_time > max_time: break
-      if num_fixes >= min_num_fixes:
+      if num_fixes >= max(3, min_num_fixes):
         if exit_minute == None or self._minimize_gps_use: break
-        if self._gps_time_offset:
-          ts = time.gmtime(time.time() + self._gps_time_offset)
-          if (ts[4] % 10 == (exit_minute - 1) % 10) and ts[5] >= 57: break
+        now = self._get_time()
+        if (now % 60) >= 58 and ((now + 2) % 600) // 60 == exit_minute: break
     if (not self._last_pos and self._uptime() > 1800) or \
-       (self._last_pos and self._now() - self._last_pos.ts > 1800):
+       (self._last_pos and now - self._last_pos.ts > 1800):
       # No GPS fix in 30 minutes, try resetting
       machine.reset()
     self._stop_gps()
 
   def _start_gps(self):
-    if self._gps_switch: self._gps_switch.value(0)  # on
+    self._gps_pwr.value(1)
     time.sleep_ms(750)
-    self._gps_uart = UART(self._board['gps_uart'], baudrate = 9600,
-        tx = Pin(self._board['gps_tx']), rx = Pin(self._board['gps_rx']),
-        rxbuf = 512, txbuf = 512, timeout = 1000)
+    (id, tx, rx) = self._board['gps_uart']
+    self._gps_uart = UART(id, tx = Pin(tx), rx = Pin(rx),
+        baudrate = 9600, rxbuf = 512, txbuf = 512, timeout = 1000)
     # Disable unused sentences
     self._gps_uart.write(
         '\r\n\r\n$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*33\r\n')
 
   def _stop_gps(self):
     self._gps_uart.deinit()
-    Pin(self._board['gps_tx'], Pin.IN)  # switch to high-Z state
-    if self._gps_switch: self._gps_switch.value(1)  # off
-    if self._led: self._led.value(0)
+    Pin(self._board['gps_uart'][1], Pin.IN)  # switch to high-Z state
+    self._gps_pwr.value(0)
+    self._led.value(0)
 
   def _reset_gps(self):
     self._start_gps()
@@ -226,16 +210,11 @@ class Tracker:
   def _get_gps_sentence(self):
     return ''.join(chr(b) for b in self._gps_uart.readline() or []).strip()
 
-  def _now(self):
+  def _get_time(self):
     return time.time() + self._gps_time_offset
 
-  def _uptime(self):
+  def _get_uptime(self):
     return time.time() - self._initial_time_offset
-
-  def _get_tx_seq(self):
-    t = time.gmtime(((self._now() - self._start_minute * 60) // 600) * 600 + \
-        self._start_minute * 60)
-    return (t[2] - 1) * 720 + t[3] * 30 + t[4] // 2
 
   def _encode_big_num(self, v):
     if v % 2 == 0:  # custom telemetry
@@ -253,11 +232,11 @@ class Tracker:
     return (cs, grid, power)
 
   def _send(self, cs, grid, power = None):
-    if self._led: self._led.value(1)
-    if self._vfo_switch: self._vfo_switch.value(0)  # on
+    self._led.value(1)
+    self._vfo_pwr.value(1)
     time.sleep_ms(250)
-    i2c = I2C(self._board['vfo_i2c'], scl = Pin(self._board['vfo_scl']),
-        sda = Pin(self._board['vfo_sda']), freq = 100000)
+    (id, scl, sda) = self._board['vfo_i2c']
+    i2c = I2C(id, scl = Pin(scl), sda = Pin(sda), freq = 100000)
     transmitter = WSPRTransmitter(i2c, self._watchdog, self._xo_freq)
     solar_elev = self._get_solar_elevation() if self._last_pos else 0
     output_power = 0 if self._force_lp_tx else 1
@@ -266,10 +245,10 @@ class Tracker:
       elif solar_elev > self._min_hp_elev: output_power = 2
     if power == None: power = [3, 10, 13, 17][output_power]
     transmitter.send(self._freq, output_power, cs, grid, power)
-    Pin(self._board['vfo_scl'], Pin.IN)
-    Pin(self._board['vfo_sda'], Pin.IN)
-    if self._vfo_switch: self._vfo_switch.value(1)  # off
-    if self._led: self._led.value(0)
+    Pin(self._board['vfo_i2c'][1], Pin.IN)
+    Pin(self._board['vfo_i2c'][2], Pin.IN)
+    self._vfo_pwr.value(0)
+    self._led.value(0)
 
   def _get_grid(self):
     pos = self._last_pos
@@ -295,12 +274,39 @@ class Tracker:
     return 57.296 * math.asin(math.sin(pos.lat / 57.296) * math.sin(dec) + \
         math.cos(pos.lat / 57.296) * math.cos(dec) * math.cos(ha))
 
+  WSPR_BANDS = {  # [start_minute_offset, start_freq]
+    '2200m': [0, 137400], '630m': [4, 475600], '160m': [8, 1838000],
+    '80m': [2, 3570000], '60m': [6, 5288600], '40m': [0, 7040000],
+    '30m': [4, 10140100], '20m': [8, 14097000], '17m': [2, 18106000],
+    '15m': [6, 21096000], '12m': [0, 24926000], '10m': [4, 28126000],
+    '6m': [8, 50294400] }
+
+  BOARDS = {
+    'ag6ns': { 'vfo_i2c': (0, 13, 12), 'vfo_pwr': ([4], True),
+      'gps_uart': (1, 8, 9), 'gps_pwr': ([16], True),
+      'gps_reset': 5, 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+    'devel_rp2040': { 'vfo_i2c': (0, 21, 20), 'vfo_pwr': ([22], True),
+      'gps_uart': (0, 0, 1), 'gps_pwr': ([10], True),
+      'gps_vbat': [[5]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+    'devel_esp32c3': { 'vfo_i2c': (0, 10, 9), 'vfo_pwr': ([5, 6, 7], False, 3),
+      'gps_uart': (1, 21, 20), 'gps_pwr': ([3, 4], False, 3),
+      'gps_vbat': [[1]], 'led': ([8], True), 'vsys': (0, 3), 'uc': 'ESP32C3' },
+    'jawbone': { 'vfo_i2c': (0, 1, 0), 'vfo_pwr': ([18], True),
+      'gps_uart': (1, 8, 9), 'gps_pwr': ([11], True),
+      'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+    'traquito': { 'vfo_i2c': (0, 5, 4), 'vfo_pwr': ([28], True),
+      'gps_uart': (1, 8, 9), 'gps_pwr': ([2], True), 'gps_reset': 6,
+      'gps_vbat': [[3]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+    'traquito2': { 'vfo_i2c': (0, 5, 4), 'vfo_pwr': ([28], True),
+      'gps_uart': (1, 8, 9), 'gps_pwr': ([2], True), 'gps_reset': 6,
+      'gps_vbat': [[3]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2350' } }
+
 class CustomTelemetry:
   def __init__(self):
-    self.value = 0
+    self.value = None
 
   def pack(self, size, value):
-    self.value = self.value * size + value % size
+    self.value = (self.value or 0) * size + value % size
 
   def pack_ct_header(self, slot):
     self.value = (self.value * 5 + slot % 5) * 2
@@ -504,6 +510,16 @@ class WSPRTransmitter:
       symbols[i] = symbols[i] * 2 + ((sync[i >> 5] >> (i & 31)) & 1)
     return symbols
 
+class Switch:
+  def __init__(self, pins = [], invert = False, drive = None, value = 0):
+    self._pins = [Pin(pin, Pin.OUT, drive = drive, value = value ^ invert)
+        if drive != None else Pin(pin, Pin.OUT, value = value ^ invert)
+        for pin in pins]
+    self._invert = invert
+
+  def value(self, value):
+    for pin in self._pins: pin.value(value ^ self._invert)
+
 class RP2040:
   def __init__(self):
     if machine.mem32[0x50110050] & (1 << 16):
@@ -514,23 +530,32 @@ class RP2040:
       machine.mem32[0x4000b0a8] = ~0x200000
       machine.mem32[0x4000b0ac] = ~0x13e0
 
-  def get_voltage(self):
-    v = sum([ADC(29).read_u16() for i in range(40)][-10:]) / 10
-    return v * 3 * 3.3 / 65535
+  def get_voltage(self, pin, multiplier):
+    v = sum([ADC(pin).read_u16() for i in range(8)]) / 8
+    return v * multiplier * 3.3 / 65535
 
   def get_temp(self):
-    v = sum([ADC(4).read_u16() for i in range(40)][-10:]) / 10
-    return int(29 - (v * 3.3 / 65535 - 0.706) / 0.001721)
+    v = sum([ADC(4).read_u16() for i in range(8)]) / 8
+    return int(27 - (v * 3.3 / 65535 - 0.706) / 0.001721)
 
 class RP2350(RP2040):
-  def __init_(self):
+  def __init__(self):
     if machine.mem32[0x40038010] & (3 << 10):
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)
 
+class ESP32C3:
+  def __init__(self):
+    global esp32; import esp32
+    machine.freq(20000000)
+
+  def get_voltage(self, pin, multiplier):
+    v = sum([ADC(pin).read_uv() for i in range(8)]) / 8
+    return v * multiplier / 1000000
+
+  def get_temp(self):
+    return sum([esp32.mcu_temperature() for i in range(8)]) // 8
+
 if __name__ == '__main__':
-  try:
-    Tracker().run()
-  except Exception:
-    while True: pass
+  Tracker().run()

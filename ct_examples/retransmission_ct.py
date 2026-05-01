@@ -13,7 +13,7 @@ FILENAME = 'pos.log'
 
 candidate_index = 0  # index in candidate_entries
 
-def handle_slot2(ct, slot, last_pos, now, **other_args):
+def handle_slot2(ct, slot, last_pos, get_time, **other_args):
   try:
     # Create an empty log file if it doesn't already exist or wrong size
     size = os.stat(FILENAME)[6] if FILENAME in os.listdir() else 0
@@ -25,7 +25,7 @@ def handle_slot2(ct, slot, last_pos, now, **other_args):
     oldest_offset = None
     oldest_cycle = None
     candidate_entries = []
-    current_cycle = now // 600
+    current_cycle = get_time() // 600
     target_cycles = \
         [(current_cycle - NUM_DAYS * 144 + offset) for offset in [36, 72, 108]]
     offset = 0

@@ -2,7 +2,7 @@
 
 Nomad is a lightweight yet full-featured U4B-protocol picoballoon
 tracker written in [MicroPython](https://micropython.org/). The entire
-tracker is provided as a single Python file (`nomad.py`) with no
+firmware is provided as a single Python file (`nomad.py`) with no
 dependencies.
 
 In addition to supporting several existing RP2040 / RP2350-based
@@ -29,14 +29,18 @@ Nomad currently has built-in support for the following tracker boards:
 ### 1. Flash MicroPython
 First, install the MicroPython firmware onto your board:
 
-1. Download the latest `.uf2` file for your specific microcontroller from 
+1. Download the latest binary for your specific microcontroller from 
 the [MicroPython Downloads page](https://micropython.org/download/) 
 (e.g., [Pico](https://micropython.org/download/rp2-pico/rp2-pico-latest.uf2),
-[Pico 2](https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2)).
+[Pico 2](https://micropython.org/download/RPI_PICO2/RPI_PICO2-latest.uf2),
+[ESP32 C3](https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin)).
 2. Put your board into BOOTSEL mode (hold the BOOT button while plugging 
 it into USB).
-3. Drag and drop the downloaded `.uf2` file onto the mounted USB mass 
-storage drive. The board will automatically reboot.
+3. On Pico-based boards, drag and drop the downloaded `.uf2` file onto
+the mounted USB mass storage drive. The board will automatically reboot.
+On ESP32 C3 boards, use the
+online [ESP Tool](https://espressif.github.io/esptool-js/) to flash
+the downloaded binary at address 0.
 
 ### 2. Upload Firmware and Configuration
 **Method A: Nomad Setup Tool (Recommended)**
@@ -133,6 +137,10 @@ or grid6 squares where transmission is disabled
 (approximately 3 dBm).
 * `"minimize_gps_use"`: *(Boolean)* Set to `true` to turn GPS off whenever 
 possible, to save power (useful for battery operation).
+* `"temp_offset"`: *(Integer)* Temperature sensor correction in degrees C.
+A positive offset increases the reported temperature.
+* `"voltage_cal"`: *(Float)* Voltage calibration factor. Set to > 1.0 to
+increase the reported voltage.
 * `"enable_ct"`: *(Boolean)* Set to `true` to enable Custom Telemetry
 as defined in the `nomad_ct.py` file.
 
@@ -167,7 +175,7 @@ the number of satellites used in the last GPS fix.
 To display Nomad's enhanced standard telemetry in WSPR TV, simply
 add `p10` to your channel identifier (such as `321p10`). No additional
 URL decorators are needed. Alternatively, you can use this
-[CT Wizard template](https://wsprtv.com/tools/ct_wizard.html?spec=https%3A%2F%2Fwsprtv.com%3Fband%3D20m%26ct_dec%3Dct%2Cs%3A2%2C5%3A2%3A0%3At_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C330%3A0%3A1~ct%2Cs%3A2%2C5%3A2%3A1%3At_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C15%3A3%3A1%2C22%3A0%3A5%26ct_labels%3DNumTX%2CNumSats%2CTTFF%26ct_units%3D%2C%2C%2Bs).
+[CT Wizard template](https://wsprtv.com/tools/ct_wizard.html?spec=http%3A%2F%2Flocalhost%3A8000%3Fband%3D20m%26ct_dec%3Dct%2Cs%3A2%2C600%3A2%3A0%3Ats_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C330%3A0%3A1~ct%2Cs%3A2%2C600%3A2%3A1%3Ats_256%3At100%2C256%3At101%2C20%3At102%2C2%3At109%2C3%3At108%2C3%3At107%2C5%3At106%2C15%3A3%3A1%2C22%3A0%3A5%26ct_labels%3DNumTX%2CNumSats%2CTTFF%26ct_units%3D%2C%2C%2Bs).
 
 To enable enhanced standard telemetry, check the corresponding box in the
 [setup tool](https://wsprtv.com/nomad/setup.html) or
@@ -191,9 +199,9 @@ marginal increase in current consumption (a few mA).
 
 ## Custom Telemetry
 
-When you enable Custom Telemetry in the setup tool or in
+When you enable Custom Telemetry (CT) in the setup tool or in
 `config.json`, Nomad expects you to upload a separate file, `nomad_ct.py`,
-containing the code to handle each enabled slot. These functions
+containing the code to handle each CT slot. These functions
 are called `handle_slot2`, `handle_slot3`, etc. and are provided with the
 following arguments:
 
@@ -216,10 +224,16 @@ functions:
   * `course` - heading in degrees (float)
   * `num_sats` - number of satellites used for the fix (integer)
   * `pdop`, `hdop` and `vdop` - fix quality indicators
-* **now** - current GPS-derived time, expressed  as the number of seconds
-  since epoch
-* **tx_seq** - a TX sequence number used by WSPR TV's
-  [temporal filters](https://wsprtv.com/docs/user_guide.html#temporal-filters)
+* **get_time** - a method that returns the current GPS-derived time
+  as the number of seconds since epoch. When the slot handler is called,
+  the timestamp is guaranteed to be past the start of the slot minute
+  for slot 0, and a few seconds before the start of the slot minute for all
+  other slots.
+* **get_voltage** - a method that returns the current system voltage.
+* **get_temp** - a method that returns the current temperature.
+* **watchdog** - a watchdog instance (can be None). If the slot handler
+takes a long time to finish, the watchdog needs to be fed
+(via `watchdog.feed()`) at least every 8 seconds to avoid a forced reset.
 
 Your functions should only list the arguments they need, leaving the
 rest in `**other_args`. For example, if only `last_pos` is
@@ -231,14 +245,14 @@ def handle_slot2(ct, last_pos, **other_args):
 ```
 
 Functions can optionally return `False` to communicate to Nomad that
-custom telemetry should not be sent in this slot at this time.
+custom telemetry should not be sent in this slot at this time. If `ct`
+is left unpopulated and the function returns `True`, the slot is
+skipped altogether (e.g. no standard telemetry is sent in slots 0 / 1).
 
 Custom telemetry messages override standard telemetry and enhanced
-standard telemetry if configured for slots 1 and 2. Sending custom
+standard telemetry if configured for slots 0 - 2. Sending custom
 telemetry in slot 4 is supported but not recommended, as there is not
-enough time then to obtain a new GPS position for the next TX cycle.
-Slot 1 custom telemetry is not recommended either, as it replaces
-U4B standard telemetry.
+enough time to obtain a new GPS position for the next TX cycle.
 
 ### BMP280 Tutorial
 
