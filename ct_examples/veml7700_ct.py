@@ -14,6 +14,5 @@ def handle_slot2(ct, slot, **other_args):
   i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
   sensor = VEML7700(i2c = i2c)
   lux = sensor.read_lux()
-  # or (x, y, z) = mpu.read_accel_data()
   ct.pack(120000, lux)
   ct.pack_ct_header(slot)

@@ -23,8 +23,8 @@ class Tracker:
     if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
     Pin(self._board['vsys'][0], Pin.IN)
     time.sleep(2)
-    gps_vbat.value(1)
-    self._led.value(0)
+    gps_vbat.on()
+    self._led.off()
     self._uc = globals()[board['uc']]()
     self._last_pos = None
     self._num_tx = 0
@@ -186,7 +186,7 @@ class Tracker:
     self._stop_gps()
 
   def _start_gps(self):
-    self._gps_pwr.value(1)
+    self._gps_pwr.on()
     time.sleep_ms(750)
     (id, tx, rx) = self._board['gps_uart']
     self._gps_uart = UART(id, tx = Pin(tx), rx = Pin(rx),
@@ -198,8 +198,8 @@ class Tracker:
   def _stop_gps(self):
     self._gps_uart.deinit()
     Pin(self._board['gps_uart'][1], Pin.IN)  # switch to high-Z state
-    self._gps_pwr.value(0)
-    self._led.value(0)
+    self._gps_pwr.off()
+    self._led.off()
 
   def _reset_gps(self):
     self._start_gps()
@@ -232,8 +232,8 @@ class Tracker:
     return (cs, grid, power)
 
   def _send(self, cs, grid, power = None):
-    self._led.value(1)
-    self._vfo_pwr.value(1)
+    self._led.on()
+    self._vfo_pwr.on()
     time.sleep_ms(250)
     (id, scl, sda) = self._board['vfo_i2c']
     i2c = I2C(id, scl = Pin(scl), sda = Pin(sda), freq = 100000)
@@ -247,8 +247,8 @@ class Tracker:
     transmitter.send(self._freq, output_power, cs, grid, power)
     Pin(self._board['vfo_i2c'][1], Pin.IN)
     Pin(self._board['vfo_i2c'][2], Pin.IN)
-    self._vfo_pwr.value(0)
-    self._led.value(0)
+    self._vfo_pwr.off()
+    self._led.off()
 
   def _get_grid(self):
     pos = self._last_pos
@@ -288,8 +288,9 @@ class Tracker:
     'devel_rp2040': { 'vfo_i2c': (0, 21, 20), 'vfo_pwr': ([22], True),
       'gps_uart': (0, 0, 1), 'gps_pwr': ([10], True),
       'gps_vbat': [[5]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
-    'devel_esp32c3': { 'vfo_i2c': (0, 10, 9), 'vfo_pwr': ([5, 6, 7], False, 3),
-      'gps_uart': (1, 21, 20), 'gps_pwr': ([3, 4], False, 3),
+    'devel_esp32c3': { 'vfo_i2c': (0, 10, 9),
+      'vfo_pwr': ([5, 6, 7], False, { 'drive': 3 }),
+      'gps_uart': (1, 21, 20), 'gps_pwr': ([3, 4], False, { 'drive': 3 }),
       'gps_vbat': [[1]], 'led': ([8], True), 'vsys': (0, 3), 'uc': 'ESP32C3' },
     'jawbone': { 'vfo_i2c': (0, 1, 0), 'vfo_pwr': ([18], True),
       'gps_uart': (1, 8, 9), 'gps_pwr': ([11], True),
@@ -359,7 +360,7 @@ class NMEAParser:
         self.pos.valid = self.pos.gga_status in [1, 2] and \
             self.pos.rmc_valid and self.pos.fix_type == 3
         return self.pos
-    except:
+    except Exception:
       self.reset()
     return None
 
@@ -374,14 +375,15 @@ class WSPRTransmitter:
     symbols = self._generate_symbols(cs, grid, power)
     if not symbols: return False
     self._initialize(output_power)
-    self._set_frequency(freq - 2, output_power)
+    if not self._set_frequency(freq - 2, output_power): return False
     start_time = time.ticks_ms()
     for i in range(162):
       if self._watchdog: self._watchdog.feed()
       self._set_symbol(symbols[i])
       if i == 0: self._enable_outputs(output_power)
       while time.ticks_diff(time.ticks_ms(), start_time) < \
-          256000 * (i + 1) // 375: time.sleep_ms(10)
+          256000 * (i + 1) // 375:
+        time.sleep_ms(10)
     self._disable_outputs()
     return True
 
@@ -396,7 +398,7 @@ class WSPRTransmitter:
     self._i2c.writeto_mem(0x60, 15, b'\x00' + clock_regs + b'\x20')
 
   def _set_frequency(self, freq, output_power):
-    self._compute_freq_params(freq)
+    if not self._compute_freq_params(freq): return False
     msx_p1 = 128 * self._d - 512
     r_log = len(bin(self._r)) - 3
     regs = bytes([0, 0x01,
@@ -405,6 +407,7 @@ class WSPRTransmitter:
     self._i2c.writeto_mem(0x60, 42, regs * max(1, output_power))
     self._update_fmd()
     self._i2c.writeto_mem(0x60, 177, b'\x20')  # reset PLL
+    return True
 
   def _update_fmd(self):
     msnx_p1 = 128 * self._a + 128 * self._b // self._c - 512
@@ -498,10 +501,12 @@ class WSPRTransmitter:
 
   def _interleave(self, symbols):
     output = bytearray(162)
-    j = -1
+    j = 0
     for i in range(256):
       ri = (((i * 2050 & 139536) | (i * 32800 & 558144)) * 65793 >> 16) & 255
-      if ri < 162: output[ri] = symbols[(j := j + 1)]
+      if ri < 162:
+        output[ri] = symbols[j]
+        j += 1
     return output
 
   def _add_sync(self, symbols):
@@ -511,14 +516,19 @@ class WSPRTransmitter:
     return symbols
 
 class Switch:
-  def __init__(self, pins = [], invert = False, drive = None, value = 0):
-    self._pins = [Pin(pin, Pin.OUT, drive = drive, value = value ^ invert)
-        if drive != None else Pin(pin, Pin.OUT, value = value ^ invert)
-        for pin in pins]
+  def __init__(self, pins = [], invert = False, opts = {}, value = 0):
+    self._pins = [Pin(pin, Pin.OUT, value = value ^ invert, **opts)
+                  for pin in pins]
     self._invert = invert
 
   def value(self, value):
     for pin in self._pins: pin.value(value ^ self._invert)
+
+  def on(self):
+    self.value(1)
+
+  def off(self):
+    self.value(0)
 
 class RP2040:
   def __init__(self):
