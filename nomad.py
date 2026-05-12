@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.008
+# Nomad: U4B-Protocol Tracker v1.009
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -131,7 +131,7 @@ class Tracker:
       self._cs3 = chr(ord('0') + (self._channel // 20) % 10)
       self._min_hp_elev = int(config.get('min_hp_elev', -91))
       self._min_uhp_elev = int(config.get('min_uhp_elev', 91))
-      self._num_initial_mp_tx = int(config.get('num_initial_mp_tx', 0))
+      self._num_initial_mp_tx = int(config.get('num_initial_mp_tx', 1))
       self._force_lp_tx = config.get('force_lp_tx', False)  # 3dBm TX
       self._tx_interval = max(1, config.get('tx_interval', 10) // 10)
       self._disable_st = config.get('disable_st', False)
@@ -218,8 +218,7 @@ class Tracker:
 
   def _encode_big_num(self, v):
     if v % 2 == 0:  # custom telemetry
-      v = (v // 640) * 640 + ((v // 2) % 5) * 128 + ((v // 10) % 4) * 2 + \
-          ((v // 40) % 16) * 8
+      v = (v // 640) * 640 + ((v // 2) % 5) * 128 + ((v // 10) % 64) * 2
     (m, n) = (v // 615600, v % 615600)
     alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     alphanum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'

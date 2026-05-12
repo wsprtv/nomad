@@ -2,8 +2,7 @@
 
 Nomad is a lightweight yet full-featured U4B-protocol picoballoon
 tracker written in [MicroPython](https://micropython.org/). The entire
-firmware is provided as a single Python file (`nomad.py`) with no
-dependencies.
+firmware is provided as a single file (`nomad.py`) with no dependencies.
 
 In addition to supporting several existing RP2040 / RP2350-based
 trackers out of the box, Nomad can be adapted to new designs with
