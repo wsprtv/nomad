@@ -224,10 +224,10 @@ functions:
   * `num_sats` - number of satellites used for the fix (integer)
   * `pdop`, `hdop` and `vdop` - fix quality indicators
 * **get_time** - a method that returns the current GPS-derived time
-  as the number of seconds since epoch. When the slot handler is called,
-  the timestamp is guaranteed to be past the start of the slot minute
-  for slot 0, and a few seconds before the start of the slot minute for all
-  other slots.
+  as the number of seconds since epoch (Jan 1, 2000). When the slot handler
+  is called, the timestamp is guaranteed to be past the start of the slot
+  minute for slot 0, and a few seconds before the start of the slot minute
+  for all other slots.
 * **get_voltage** - a method that returns the current system voltage.
 * **get_temp** - a method that returns the current temperature.
 * **watchdog** - a watchdog instance (can be None). If the slot handler

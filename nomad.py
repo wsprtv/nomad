@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.009
+# Nomad: U4B-Protocol Tracker v1.010
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -21,7 +21,7 @@ class Tracker:
     self._vfo_pwr = Switch(*board.get('vfo_pwr', []), value = 0)
     gps_vbat = Switch(*board.get('gps_vbat', []), value = 0)
     if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
-    Pin(self._board['vsys'][0], Pin.IN)
+    Pin(self._board['vsense'][0], Pin.IN)
     time.sleep(2)
     gps_vbat.on()
     self._led.off()
@@ -82,7 +82,7 @@ class Tracker:
     self._last_voltage = self._get_voltage()
     m = (ord(grid6[4]) - 97) * 25632 + (ord(grid6[5]) - 97) * 1068 + \
         (int(self._last_pos.altitude) // 20) % 1068
-    n = ((self._last_temp + 50) % 90) * 6720 + \
+    n = (math.floor(self._last_temp + 50) % 90) * 6720 + \
         (math.floor((self._last_voltage - 2) / 0.05) % 40) * 168 + \
         (int(self._last_pos.speed / 2) % 42) * 4 + 3
     return self._encode_big_num(m * 615600 + n)
@@ -91,7 +91,7 @@ class Tracker:
     return self._uc.get_temp() + self._temp_offset
 
   def _get_voltage(self):
-    return self._uc.get_voltage(*self._board['vsys']) * self._voltage_cal
+    return self._uc.get_voltage(*self._board['vsense']) * self._voltage_cal
 
   def _should_tx(self):
     return self._last_pos and self._get_time() - self._last_pos.ts < 600 and \
@@ -152,19 +152,20 @@ class Tracker:
     start_time = time.time()
     self._ttff = None
     num_fixes = 0
-    self._gps_uart.read(self._gps_uart.any())  # flush GPS
+    if self._gps_uart.any(): self._gps_uart.read()  # flush GPS
     led_toggle_ticks = None
     while True:
       if self._gps_uart.any():
         if self._watchdog: self._watchdog.feed()
         sentence = self._get_gps_sentence()
         if self._debug: print(sentence)
-        pos = nmea_parser.parse(sentence)
-        if pos and pos.valid:
-          self._last_pos = pos
-          self._gps_time_offset = pos.ts - time.time()
-          if self._ttff == None: self._ttff = time.time() - start_time
-          num_fixes += 1
+        if pos := nmea_parser.parse(sentence):
+          if pos.valid:
+            self._last_pos = pos
+            self._gps_time_offset = pos.ts - time.time()
+            if self._ttff == None: self._ttff = time.time() - start_time
+            num_fixes += 1
+          nmea_parser.reset()
         if sentence[3:6] == 'RMC':
           self._led.value(self._ttff == None)
           led_toggle_ticks = time.ticks_add(time.ticks_ms(), 50)
@@ -283,23 +284,20 @@ class Tracker:
   BOARDS = {
     'ag6ns': { 'vfo_i2c': (0, 13, 12), 'vfo_pwr': ([4], True),
       'gps_uart': (1, 8, 9), 'gps_pwr': ([16], True),
-      'gps_reset': 5, 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
-    'devel_rp2040': { 'vfo_i2c': (0, 21, 20), 'vfo_pwr': ([22], True),
-      'gps_uart': (0, 0, 1), 'gps_pwr': ([10], True),
-      'gps_vbat': [[5]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
-    'devel_esp32c3': { 'vfo_i2c': (0, 10, 9),
-      'vfo_pwr': ([5, 6, 7], False, { 'drive': 3 }),
-      'gps_uart': (1, 21, 20), 'gps_pwr': ([3, 4], False, { 'drive': 3 }),
-      'gps_vbat': [[1]], 'led': ([8], True), 'vsys': (0, 3), 'uc': 'ESP32C3' },
+      'gps_reset': 5, 'led': [[25]], 'vsense': (29, 3), 'uc': 'RP2040' },
     'jawbone': { 'vfo_i2c': (0, 1, 0), 'vfo_pwr': ([18], True),
       'gps_uart': (1, 8, 9), 'gps_pwr': ([11], True),
-      'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+      'led': [[25]], 'vsense': (29, 3), 'uc': 'RP2040' },
     'traquito': { 'vfo_i2c': (0, 5, 4), 'vfo_pwr': ([28], True),
       'gps_uart': (1, 8, 9), 'gps_pwr': ([2], True), 'gps_reset': 6,
-      'gps_vbat': [[3]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2040' },
+      'gps_vbat': [[3]], 'led': [[25]], 'vsense': (29, 3), 'uc': 'RP2040' },
     'traquito2': { 'vfo_i2c': (0, 5, 4), 'vfo_pwr': ([28], True),
       'gps_uart': (1, 8, 9), 'gps_pwr': ([2], True), 'gps_reset': 6,
-      'gps_vbat': [[3]], 'led': [[25]], 'vsys': (29, 3), 'uc': 'RP2350' } }
+      'gps_vbat': [[3]], 'led': [[25]], 'vsense': (29, 3), 'uc': 'RP2350' },
+    'vagabond1': { 'vfo_i2c': (0, 10, 9),
+      'vfo_pwr': ([5, 6, 7], False, { 'drive': 3 }), 'gps_uart': (1, 21, 20),
+      'gps_pwr': ([3, 4], False, { 'drive': 3 }), 'gps_vbat': [[1]],
+      'led': ([8], True), 'vsense': (0, 6), 'uc': 'ESP32C3' } }
 
 class CustomTelemetry:
   def __init__(self):
@@ -327,14 +325,14 @@ class NMEAParser:
     self.pos = Position()
 
   def parse(self, sentence):
-    if len(sentence) < 9: return None
-    checksum = 0
-    for c in sentence[1:-3]: checksum ^= ord(c)
-    if sentence[0] != '$' or sentence[-3] != '*' or \
-        checksum != int(sentence[-2:], 16): return None
-    sentence_type = sentence[3:6]
-    f = sentence[:-3].split(',')
     try:
+      if len(sentence) < 9: raise Exception()
+      checksum = 0
+      for c in sentence[1:-3]: checksum ^= ord(c)
+      if sentence[0] != '$' or sentence[-3] != '*' or \
+          checksum != int(sentence[-2:], 16): raise Exception()
+      sentence_type = sentence[3:6]
+      f = sentence[:-3].split(',')
       if sentence_type == 'GGA' and len(f) > 10:
         self.reset()
         self.pos.gga_status = int(f[6])

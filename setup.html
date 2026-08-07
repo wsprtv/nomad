@@ -328,8 +328,7 @@
           'The frequency of your crystal (adjust according to your ' +
           'specific hardware).' },
       { key: 'board', type: 'select', label: 'Board Type', required: true,
-        options: ['ag6ns', 'devel_rp2040', 'devel_esp32c3', 'jawbone',
-                  'traquito', 'traquito2'],
+        options: ['ag6ns', 'jawbone', 'traquito', 'traquito2', 'vagabond1'],
         description: 'The target hardware you are running this on.' },
 
       { section: 'Optional Settings' },
@@ -491,21 +490,21 @@
         const setup_code = `
 import sys
 try:
-    if sys.platform == 'rp2':
-        import machine, os
-        if 'RP2040' in os.uname().machine:
-            machine.mem32[0x40058000] = 0
-        elif 'RP2350' in os.uname().machine:
-            machine.mem32[0x400d8000] = 0
-    elif sys.platform == 'esp32':
-        machine.mem32[0x600080a8] = 0x50d83aa1
-        machine.mem32[0x60008090] &= ~(1 << 31)
-        machine.mem32[0x600080a8] = 0
-        machine.mem32[0x6001f064] = 0x50d83aa1
-        machine.mem32[0x6001f048] &= ~(1 << 31)
-        machine.mem32[0x6001f064] = 0
+  if sys.platform == 'rp2':
+    import machine, os
+    if 'RP2040' in os.uname().machine:
+      machine.mem32[0x40058000] = 0
+    elif 'RP2350' in os.uname().machine:
+      machine.mem32[0x400d8000] = 0
+  elif sys.platform == 'esp32':
+    machine.mem32[0x600080a8] = 0x50d83aa1
+    machine.mem32[0x60008090] &= ~(1 << 31)
+    machine.mem32[0x600080a8] = 0
+    machine.mem32[0x6001f064] = 0x50d83aa1
+    machine.mem32[0x6001f048] &= ~(1 << 31)
+    machine.mem32[0x6001f064] = 0
 except:
-    pass
+  pass
 print('PING')`;
 
         const ping_res = await runPythonCode(setup_code, 2000);
