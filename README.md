@@ -4,7 +4,7 @@ Nomad is a lightweight yet full-featured U4B-protocol picoballoon
 tracker written in [MicroPython](https://micropython.org/). The entire
 firmware is provided as a single file (`nomad.py`) with no dependencies.
 
-In addition to supporting several existing RP2040 / RP2350-based
+In addition to supporting several existing RP2040 / RP2350 / ESP32-based
 trackers out of the box, Nomad can be adapted to new designs with
 minimal changes. Custom boards only require a [MicroPython supported
 microcontroller](https://micropython.org/download), a GPS module, and an
@@ -18,10 +18,10 @@ si5351a / ms5351m clock generator.
 
 Nomad currently has built-in support for the following tracker boards:
 * [ag6ns](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1)
-* `devel` (specify your own pin connections)
 * [jawbone](https://github.com/EngineerGuy314/JAWBONE)
 * [traquito](https://traquito.github.io)
 * [traquito2](https://traquito.github.io) (Jetpack with a Pico 2 board)
+* [vagabond1](https://github.com/wsprtv/vagabond1)
 
 ## Installation
 
@@ -108,8 +108,9 @@ a minimal configuration example:
 * `"band"`: The transmission band. Accepts values from `"2200m"` up to `"6m"`.
 * `"xo_freq"`: The frequency of your crystal (adjust according to your 
 specific hardware).
-* `"board"`: The target hardware. Must be one of `"ag6ns"`, `"devel"`,
-`"jawbone"`, `"traquito"`, or `"traquito2"` (Jetpack with a Pico 2 board).
+* `"board"`: The target hardware. Must be one of `"ag6ns"`,
+`"jawbone"`, `"traquito"`, `"traquito2"` (Jetpack with a Pico 2 board),
+or `"vagabond1"`.
 
 **Optional:**
 * `"min_hp_elev"`: *(Integer)* Uses 10 dBm TX mode when solar elevation 
@@ -182,7 +183,7 @@ set `"enable_enhanced_st"` to `true` in `config.json`.
 
 ## Ultra High Power (UHP) Hardware Modification
 
-On existing tracker boards, enabling UHP mode in Nomad's settings
+On some existing tracker boards, enabling UHP mode in Nomad's settings
 requires adding a small wire between pin 6 (clk2) and pin 9 (clk1) of
 si5351a / ms5351m.
 
