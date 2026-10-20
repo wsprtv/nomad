@@ -1,6 +1,6 @@
 # Nomad
 
-Nomad is a lightweight yet full-featured U4B-protocol picoballoon
+Nomad is a lightweight yet full-featured multiprotocol picoballoon
 tracker written in [MicroPython](https://micropython.org/). The entire
 firmware is provided as a single file (`nomad.py`) with no dependencies.
 
@@ -103,7 +103,8 @@ a minimal configuration example:
 ### Configuration Options
 
 **Required:**
-* `"callsign"`: Your amateur radio callsign.
+* `"callsign"`: Your amateur radio callsign. The callsign may contain
+a suffix (e.g. N0CALL/22).
 * `"channel"`: Your designated U4B channel.
 * `"band"`: The transmission band. Accepts values from `"2200m"` up to `"6m"`.
 * `"xo_freq"`: The frequency of your crystal (adjust according to your 
@@ -135,8 +136,8 @@ or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
 * `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
 (approximately 3 dBm).
-* `"minimize_gps_use"`: *(Boolean)* Set to `true` to turn GPS off whenever 
-possible, to save power (useful for battery operation).
+* `"max_gps_runtime"`: *(Integer)* Run GPS for at most this many seconds
+per cycle (useful for battery operation)
 * `"temp_offset"`: *(Integer)* Temperature sensor correction in degrees C.
 A positive offset increases the reported temperature.
 * `"voltage_cal"`: *(Float)* Voltage calibration factor. Set to > 1.0 to
@@ -155,9 +156,16 @@ the LED is disabled in the config.
 once per second. Indicates a solid GPS lock.
 * **Solidly Lit:** The tracker is currently transmitting.
 
+## Non-U4B Protocol Support
+
+While Nomad is optimized for the U4B protocol, it can support many other
+WSPR protocols via Custom Telemetry. See the following examples
+for [Zachtek](https://github.com/wsprtv/nomad/blob/main/ct_examples/zachtek2_ct.py)
+and [WB8ELK](https://github.com/wsprtv/nomad/blob/main/ct_examples/wb8elk_ct.py).
+
 ## Enhanced Standard Telemetry
 
-Nomad can be configured to send enhanced standard telemetry in slot 2
+Nomad can be configured to send enhanced U4B standard telemetry in slot 2
 to improve the range and resolution of your data:
 
 * Latitude and longitude resolution is increased 256x, improving
@@ -215,6 +223,9 @@ functions:
     called last.
   * `ct.pack_et0_header(hdr_type)` - used to terminate the message with an
     ET0 header instead. `hdr_type` should be 0 for USER_DEFINED.
+  * You can also specify the U4B `big_num` directly (via `ct.big_num = x`)
+    or set the raw WSPR message with
+    `ct.wspr_message = (message_type, callsign, grid, power)`.  
 * **last_pos** - a GPS position object containing the following fields:
   * `ts` - timestamp, expressed as the number of seconds since epoch
   * `lat` - latitude (float, -90 - 90)
@@ -234,6 +245,8 @@ functions:
 * **watchdog** - a watchdog instance (can be None). If the slot handler
 takes a long time to finish, the watchdog needs to be fed
 (via `watchdog.feed()`) at least every 8 seconds to avoid a forced reset.
+* **config** - contains settings such as `callsign`, `band`, `channel`, etc.
+* **default_handler** - the default handler function for this slot
 
 Your functions should only list the arguments they need, leaving the
 rest in `**other_args`. For example, if only `last_pos` is
@@ -244,15 +257,16 @@ def handle_slot2(ct, last_pos, **other_args):
   # Pack last_pos to ct
 ```
 
-Functions can optionally return `False` to communicate to Nomad that
-custom telemetry should not be sent in this slot at this time. If `ct`
-is left unpopulated and the function returns `True`, the slot is
-skipped altogether (e.g. no standard telemetry is sent in slots 0 / 1).
+If `ct` is left unpopulated, nothing is sent in that slot.
 
 Custom telemetry messages override standard telemetry and enhanced
 standard telemetry if configured for slots 0 - 2. Sending custom
 telemetry in slot 4 is supported but not recommended, as there is not
 enough time to obtain a new GPS position for the next TX cycle.
+
+In addition to slot handlers, Custom Telemetry can also override two
+additional functions -- `set_cycle_params` and `should_tx`. See
+`nomad.py` for details on how those functions are used.
 
 ### BMP280 Tutorial
 

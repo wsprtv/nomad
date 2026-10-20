@@ -370,9 +370,9 @@
       { key: 'disable_watchdog', type: 'checkbox', label: 'Disable Watchdog',
         required: false, description:
           'Check to disable the hardware watchdog (useful for debugging).' },
-      { key: 'minimize_gps_use', type: 'checkbox', label: 'Minimize GPS Use',
-        required: false, description:
-          'Power off GPS whenever possible (useful for battery operation).' },
+      { key: 'max_gps_runtime', type: 'number', label: 'Maximum GPS Runtime',
+        required: false, placeholder: 0, description:
+          'Maximum GPS runtime per cycle (0 to disable).' },
       { key: 'temp_offset', type: 'number',
         label: 'Temperature Offset', placeholder: 0,
         required: false, description:
@@ -922,7 +922,8 @@ print('PING')`;
           }
         }
         if (item.key === 'callsign' && val !== "") {
-          if (!/^[A-Z0-9]{3,8}$/.test(val) || !/\d/.test(val)) {
+          if (!/^[A-Za-z0-9]{4,7}(?:\/(?:[A-Za-z]|\d|[1-9]\d))?$/.test(val) ||
+              !/\d/.test(val)) {
             item_has_error = true;
             error_messages.push(
                 `'${val}' does not appear to be a valid callsign format.`);

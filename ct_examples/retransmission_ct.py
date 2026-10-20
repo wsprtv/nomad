@@ -53,4 +53,4 @@ def handle_slot2(ct, slot, last_pos, get_time, **other_args):
     ct.pack(3, target_cycles.index(cycle))
     ct.pack_ct_header(slot)
   except Exception:
-    return False
+    ct.big_num = None
