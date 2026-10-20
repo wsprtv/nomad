@@ -185,7 +185,7 @@ class Tracker:
       if deadline != None and self._get_time() >= deadline: break
       if num_fixes >= min_num_fixes and \
           (self._config.max_gps_runtime or not deadline): break
-    if (not self._last_pos and self._uptime() > 1800) or \
+    if (not self._last_pos and self._get_uptime() > 1800) or \
        (self._last_pos and self._get_time() - self._last_pos.ts > 1800):
       # No GPS fix in 30 minutes, try resetting
       machine.reset()
