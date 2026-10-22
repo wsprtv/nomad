@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.011
+# Nomad: U4B-Protocol Tracker v1.012
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -159,7 +159,7 @@ class Tracker:
     start_time = time.time()
     self._ttff = None
     num_fixes = 0
-    if self._gps_uart.any(): self._gps_uart.read()  # flush GPS
+    self._gps_uart.read(self._gps_uart.any())  # flush GPS
     led_toggle_ticks = None
     while True:
       if self._gps_uart.any():
