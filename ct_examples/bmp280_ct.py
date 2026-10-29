@@ -11,7 +11,7 @@ from machine import I2C, Pin
 from bme280_float import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   bmp280 = BME280(i2c = i2c_alt, address = 0x77)
   (temp, pressure, _) = bmp280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m

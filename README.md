@@ -114,11 +114,14 @@ specific hardware).
 or `"vagabond1"`.
 
 **Optional:**
-* `"min_hp_elev"`: *(Integer)* Uses 10 dBm TX mode when solar elevation 
-is under this threshold (in degrees). Uses 13 dBm otherwise.
-* `"min_uhp_elev"`: *(Integer)* Uses 15 dBm TX mode when solar elevation 
-is above this threshold (in degrees). Requires hardware modification to
-existing boards.
+* `"min_mp_elev"`: *(Integer)* Don't use medium power TX (10 dBm) below this
+solar elevation (in degrees).
+* `"min_hp_elev"`: *(Integer)* Don't use high power TX (13 dBm) below this
+solar elevation (in degrees).
+* `"min_uhp_elev"`: *(Integer)* Don't use ultra-high power TX (17 dBm) below
+this solar elevation (in degrees).
+* `"num_initial_lp_tx"`: *(Integer)* Number of TX cycles after startup to
+use low (3 dBm) power. 
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
 * `"tx_interval"`: *(Integer)* Interval between TX cycles. Must be
@@ -134,10 +137,10 @@ watchdog (useful for debugging).
 * `"geofenced_grids"`: *(Array of Strings)* List of Maidenhead grid2, grid4,
 or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
-* `"force_lp_tx"`: *(Boolean)* Set to `true` to force low transmission power 
-(approximately 3 dBm).
 * `"max_gps_runtime"`: *(Integer)* Run GPS for at most this many seconds
 per cycle (useful for battery operation)
+* `"enable_lp_sleep"`: *(Boolean)* Set to `true` to enable low-power
+(0.3mA) sleep mode. Experimental. Only applies to Vagabond1.
 * `"temp_offset"`: *(Integer)* Temperature sensor correction in degrees C.
 A positive offset increases the reported temperature.
 * `"voltage_cal"`: *(Float)* Voltage calibration factor. Set to > 1.0 to
@@ -189,9 +192,64 @@ To enable enhanced standard telemetry, check the corresponding box in the
 [setup tool](https://wsprtv.com/nomad/setup.html) or
 set `"enable_enhanced_st"` to `true` in `config.json`.
 
+## Configuring Output Power
+
+Nomad can be configured to transmit at 4 power levels:
+
+- **Low (LP)**: reported as 3 dBm in regular callsign messages
+- **Medium (MP)**: reported as 10 dBm
+- **High (HP)**: reported as 13 dBm
+- **Ultra-High (UHP)**: reported as 17 dBm. Requires a hardware mod
+(except on Vagabond boards).
+
+The advantage of using low power modes is to be able to transmit at lower
+solar angles. The low power mode uses about as much current as running
+the GPS, while HP / UHP may more than double the current requirement.
+
+The output power is configured using 5 Nomad settings:
+
+- `min_mp_elev`
+- `min_hp_elev`
+- `min_uhp_elev`
+- `num_initial_lp_tx`
+- `num_initial_mp_tx`
+
+The last two settings specify the number of LP / MP transmissions
+after startup. After that, Nomad uses the highest possible power
+allowed by the solar angle. For example, for this configuration:
+
+- `min_mp_elev = 15`
+- `min_hp_elev = 20`
+- `min_uhp_elev = 25`
+- `num_initial_lp_tx = 1`
+- `num_initial_mp_tx = 1`
+
+Nomad will do one LP and then one MP transmission after startup. Then,
+it will do MP transmissions for solar angles between 15 and 19 degrees,
+HP transmissions for solar angles between 20 and 24 degrees, and
+UHP transmissions at or above 25 degrees. Below 15 degrees,
+Nomad will default to LP.
+
+A power mode can be always disabled with `elev = 90` or always enabled
+with `elev = -90`.
+
+Output power can also be controlled via Custom Telemetry based on
+battery voltage, solar angle, etc. Refer to Nomad's `set_cycle_params`
+function implementation.
+
+## Power Optimization ##
+
+By default, Nomad runs GPS whenever it's not transmitting. This ensures
+that the most up-to-date positions are sent. For battery operation,
+an optional `max_gps_runtime` parameter can be specified, which will
+keep GPS powered off until the given number of seconds before the start
+of TX. The recommended setting for battery operation is 180 (3 minutes).
+
+GPS will stop after obtaining a few fixes when `max_gps_runtime > 0`.
+
 ## Ultra High Power (UHP) Hardware Modification
 
-On some existing tracker boards, enabling UHP mode in Nomad's settings
+On non-Vagabond tracker boards, enabling UHP mode in Nomad's settings
 requires adding a small wire between pin 6 (clk2) and pin 9 (clk1) of
 si5351a / ms5351m.
 
@@ -241,11 +299,14 @@ functions:
   minute for slot 0, and a few seconds before the start of the slot minute
   for all other slots.
 * **get_voltage** - a method that returns the current system voltage.
-* **get_temp** - a method that returns the current temperature.
+* **get_temp** - a method that returns the current temperature in degrees C.
+* **get_solar_elevation** - a method that returns the current solar
+elevation in degrees.
 * **watchdog** - a watchdog instance (can be None). If the slot handler
 takes a long time to finish, the watchdog needs to be fed
 (via `watchdog.feed()`) at least every 8 seconds to avoid a forced reset.
-* **config** - contains settings such as `callsign`, `band`, `channel`, etc.
+* **config** - an object containing settings such as `callsign`, `band`,
+`channel`, etc.
 * **default_handler** - the default handler function for this slot
 
 Your functions should only list the arguments they need, leaving the
@@ -353,7 +414,7 @@ from machine import I2C, Pin
 from bme280_float import * 
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   bmp280 = BME280(i2c = i2c, address = 0x77)
   (temp, pressure, _) = bmp280.read_compensated_data()
   # Pack altitude: 50m increments from 0 to 16150m

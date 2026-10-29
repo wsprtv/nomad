@@ -1,9 +1,9 @@
-# Nomad: U4B-Protocol Tracker v1.012
+# Nomad: U4B-Protocol Tracker v1.014
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
 import json, machine, math, re, struct, time
-from machine import ADC, I2C, Pin, UART, WDT
+from machine import ADC, I2C, mem32, Pin, UART, WDT
 
 class Tracker:
   def __init__(self, debug = False):
@@ -16,17 +16,19 @@ class Tracker:
     self._watchdog = WDT(timeout = 8000) \
         if (not config.disable_watchdog and not self._debug) else None
     board = self._board
+    self._uc = globals()[board['uc']]()
     self._led = Switch(*board.get('led', []), value = 1) \
         if not config.disable_led else Switch()
     self._gps_pwr = Switch(*board.get('gps_pwr', []), value = 0)
     self._vfo_pwr = Switch(*board.get('vfo_pwr', []), value = 0)
     gps_vbat = Switch(*board.get('gps_vbat', []), value = 0)
+    gps_vbat.hold(0)
     if 'gps_reset' in board: Pin(board['gps_reset'], Pin.IN, Pin.PULL_UP)
     Pin(board['vsense'][0], Pin.IN)
     time.sleep(2)
     gps_vbat.on()
+    gps_vbat.hold(1)  # to persist across light_sleep()
     self._led.off()
-    self._uc = globals()[board['uc']]()
     self._last_pos = None
     self._num_tx = 0
 
@@ -47,6 +49,7 @@ class Tracker:
         if ct.wspr_message:
           self._wait_until(self._cycle_params.tx_start_ts + slot * 120)
           self._send(ct.wspr_message)
+      self._num_tx += 1
 
   def _set_cycle_params(self, params, **_):
     config = self._config
@@ -56,6 +59,7 @@ class Tracker:
         if config.max_gps_runtime else 0
     params.gps_stop_ts = params.tx_start_ts - 1
     params.freq = config.freq
+    params.output_power = None  # let the transmitter decide
 
   def _should_tx(self, **_):
     return self._get_time() - self._last_pos.ts < 500 and \
@@ -111,12 +115,16 @@ class Tracker:
     while True:
       if self._watchdog: self._watchdog.feed()
       if self._get_time() >= ts: break
-      time.sleep_ms(100)
+      if self._config.enable_lp_sleep:
+        self._uc.light_sleep(200)
+      else:
+        time.sleep_ms(100)
 
   def _get_ct_context(self):
     return { 'last_pos': self._last_pos, 'get_time': self._get_time,
              'get_voltage': self._get_voltage, 'get_temp': self._get_temp,
-             'watchdog': self._watchdog, 'config': self._config }
+             'get_solar_elevation': self._get_solar_elevation,
+             'config': self._config, 'watchdog': self._watchdog }
 
   def _read_config(self):
     with open('config.json', 'r') as f:
@@ -135,10 +143,11 @@ class Tracker:
       config.xo_freq = int(c['xo_freq'])
       config.cs1 = ['0', '1', 'Q'][config.channel // 200]
       config.cs3 = chr(ord('0') + (config.channel // 20) % 10)
-      config.min_hp_elev = int(c.get('min_hp_elev', -91))
-      config.min_uhp_elev = int(c.get('min_uhp_elev', 91))
+      config.min_mp_elev = int(c.get('min_mp_elev', -90))
+      config.min_hp_elev = int(c.get('min_hp_elev', 20))
+      config.min_uhp_elev = int(c.get('min_uhp_elev', 90))
+      config.num_initial_lp_tx = int(c.get('num_initial_lp_tx', 0))
       config.num_initial_mp_tx = int(c.get('num_initial_mp_tx', 1))
-      config.force_lp_tx = c.get('force_lp_tx', False)  # 3dBm TX
       config.tx_interval = 600 * max(1, c.get('tx_interval', 10) // 10)
       config.disable_st = c.get('disable_st', False)
       config.enable_enhanced_st = c.get('enable_enhanced_st', False)
@@ -146,6 +155,7 @@ class Tracker:
       config.disable_watchdog = c.get('disable_watchdog', False)
       config.geofenced_grids = c.get('geofenced_grids', [])
       config.max_gps_runtime = c.get('max_gps_runtime', None)
+      config.enable_lp_sleep = c.get('enable_lp_sleep', False)
       config.enable_ct = c.get('enable_ct', False)
       config.temp_offset = c.get('temp_offset', 0)
       config.voltage_cal = c.get('voltage_cal', 1)
@@ -192,6 +202,7 @@ class Tracker:
     self._stop_gps()
 
   def _start_gps(self):
+    time.sleep_ms(50)
     self._gps_pwr.on()
     time.sleep_ms(750)
     (id, tx, rx) = self._board['gps_uart']
@@ -244,11 +255,14 @@ class Tracker:
     (id, scl, sda) = self._board['vfo_i2c']
     i2c = I2C(id, scl = Pin(scl), sda = Pin(sda), freq = 100000)
     transmitter = WSPRTransmitter(i2c, self._watchdog, self._config.xo_freq)
-    solar_elev = self._get_solar_elevation() if self._last_pos else 0
-    output_power = 0 if self._config.force_lp_tx else 1
-    if self._num_tx >= self._config.num_initial_mp_tx:
-      if solar_elev > self._config.min_uhp_elev: output_power = 3
-      elif solar_elev > self._config.min_hp_elev: output_power = 2
+    output_power = self._cycle_params.output_power
+    if output_power == None:
+      output_power = max(i for (i, v) in enumerate(
+          [-90, self._config.min_mp_elev, self._config.min_hp_elev,
+           self._config.min_uhp_elev]) if self._get_solar_elevation() >= v)
+      if self._num_tx < self._config.num_initial_lp_tx: output_power = 0
+      elif self._num_tx < self._config.num_initial_lp_tx + \
+          self._config.num_initial_mp_tx: output_power = 1
     if power == None: power = [3, 10, 13, 17][output_power]
     transmitter.send(self.WSPR_BANDS[self._config.band][1] +
         self._cycle_params.freq, output_power, message_type, cs, grid, power)
@@ -263,8 +277,8 @@ class Tracker:
         (grid6[0] + grid6[2]) in self._config.geofenced_grids
 
   def _get_solar_elevation(self):
-    pos = self._last_pos
-    t = time.gmtime(pos.ts)
+    if not (pos := self._last_pos): return -90
+    t = time.gmtime(self._get_time())
     b = 2 * math.pi * (t[7] - 82) / 365
     eot = 9.87 * math.sin(2 * b) - 7.53 * math.cos(b) - 1.5 * math.sin(b)
     ha = (15 * (t[3] + t[4] / 60 + pos.lon / 15 + eot / 60 - 12)) / 57.296
@@ -397,7 +411,7 @@ class WSPRTransmitter:
     # Wait for vfo to start up
     while self._i2c.readfrom_mem(0x60, 0x00, 1)[0] & 0x80: pass
     self._disable_outputs()
-    drive = [0, 3][output_power > 0]
+    drive = [1, 3][output_power > 0]
     clock_regs = bytes([0x4c | drive] + [[0x5f, 0x83][output_power < 2]] + \
         [[0x5f, 0x83][output_power < 2]] + [0x83] * 5)
     # Select XTAL inputs, set clocks, set disable state
@@ -555,15 +569,21 @@ class Switch:
   def off(self):
     self.value(0)
 
+  def hold(self, enable):
+    try:  # not all UCs support this
+      for pin in self._pins: pin.init(hold = enable)
+    except:
+      pass
+
 class RP2040:
   def __init__(self):
-    if machine.mem32[0x50110050] & (1 << 16):
+    if mem32[0x50110050] & (1 << 16):
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)
       # Disable unused peripherals in sleep mode
-      machine.mem32[0x4000b0a8] = ~0x200000
-      machine.mem32[0x4000b0ac] = ~0x13e0
+      mem32[0x4000b0a8] = ~0x200000
+      mem32[0x4000b0ac] = ~0x13e0
 
   def get_voltage(self, pin, multiplier):
     v = sum([ADC(pin).read_u16() for i in range(8)]) / 8
@@ -573,9 +593,12 @@ class RP2040:
     v = sum([ADC(4).read_u16() for i in range(8)]) / 8
     return int(27 - (v * 3.3 / 65535 - 0.706) / 0.001721)
 
+  def light_sleep(self, ms):
+    time.sleep_ms(ms)
+
 class RP2350(RP2040):
   def __init__(self):
-    if machine.mem32[0x40038010] & (3 << 10):
+    if mem32[0x40038010] & (3 << 10):
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)
@@ -585,12 +608,28 @@ class ESP32C3:
     global esp32; import esp32
     machine.freq(20000000)
 
+  def _enable_adc(self):
+    mem32[0x60040000] |= (3 << 27)
+    mem32[0x60040058] |= (1 << 22)
+
+  def _disable_adc(self):
+    mem32[0x60040058] &= ~(1 << 22)
+    mem32[0x60040000] = (mem32[0x60040000] & ~(3 << 27)) | (2 << 27)
+
   def get_voltage(self, pin, multiplier):
+    self._enable_adc()
     v = sum([ADC(pin).read_uv() for i in range(8)]) / 8
+    self._disable_adc()
     return v * multiplier / 1000000
 
   def get_temp(self):
-    return sum([esp32.mcu_temperature() for i in range(8)]) // 8
+    self._enable_adc()
+    v = sum([esp32.mcu_temperature() for i in range(8)]) // 8
+    self._disable_adc()
+    return v
+
+  def light_sleep(self, ms):
+    machine.lightsleep(ms)
 
 if __name__ == '__main__':
   Tracker().run()

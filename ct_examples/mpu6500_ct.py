@@ -12,7 +12,7 @@ from machine import I2C, Pin
 from mpu6500 import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   mpu = MPU6500(i2c, accel_sf=SF_G, gyro_sf=SF_DEG_S)
   (x, y, z) = mpu.gyro
   # or (x, y, z) = mpu.read_accel_data()

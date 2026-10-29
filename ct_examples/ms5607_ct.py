@@ -14,7 +14,7 @@ class MyI2C(I2C):
   def start(self): pass
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = MyI2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = MyI2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   sensor = MS5607(i2c)
   ct.pack(120000, int(sensor.get_pressure(16)))
   ct.pack(1200, int(sensor.get_temperature(16) / 10 + 70))

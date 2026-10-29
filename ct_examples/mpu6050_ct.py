@@ -11,7 +11,7 @@ from machine import I2C, Pin
 from MPU6050 import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   mpu = MPU6050(i2c)
   (x, y, z) = mpu.read_gyro_data()
   # or (x, y, z) = mpu.read_accel_data()

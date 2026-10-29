@@ -13,7 +13,7 @@ from machine import I2C, Pin
 from as7341 import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   sensor = AS7341(i2c)
   sensor.set_measure_mode(AS7341_MODE_SPM)
   sensor.set_atime(29)

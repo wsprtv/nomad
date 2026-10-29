@@ -333,23 +333,31 @@
 
       { section: 'Optional Settings' },
 
-      { key: 'min_hp_elev', type: 'number',
-        label: 'Minimum Solar Elevation for High Power TX', placeholder: -90,
+      { key: 'min_mp_elev', type: 'number',
+        label: 'Minimum Solar Elevation for Medium Power TX', placeholder: -90,
         required: false, description:
-          'Uses 10 dBm TX mode when solar elevation is under this threshold ' +
-          '(in degrees). Uses 13 dBm otherwise.' },
+          'Enable medium TX power (10 dBm) when solar elevation ' +
+          'is not below this threshold (in degrees).' },
+      { key: 'min_hp_elev', type: 'number',
+        label: 'Minimum Solar Elevation for High Power TX', placeholder: 20,
+        required: false, description:
+          'Enable high TX power (13 dBm) when solar elevation ' +
+          'is not below this threshold (in degrees).' },
       { key: 'min_uhp_elev', type: 'number',
         label: 'Minimum Solar Elevation for Ultra High Power TX',
         placeholder: 90, required: false, description:
-          'Uses 15 dBm TX mode when solar elevation is above this threshold ' +
-          '(in degrees). Requires hardware modifications.' },
+          'Enable ultra-high TX power (17 dBm) when solar ' +
+          'elevation is not below this threshold (in degrees). ' +
+          '*WARNING: leave at 90 (always turned off) unless you are sure ' +
+          'that your board supports ultra-high power.*' },
+      { key: 'num_initial_lp_tx', type: 'number',
+        label: 'Initial Number of TX Cycles at Low Power', placeholder: 0,
+        required: false, description:
+          'Number of TX cycles after startup to use low (3 dBm) power.' },
       { key: 'num_initial_mp_tx', type: 'number',
         label: 'Initial Number of TX Cycles at Medium Power', placeholder: 1,
         required: false, description:
           'Number of TX cycles after startup to use medium (10 dBm) power.' },
-      { key: 'force_lp_tx', type: 'checkbox', label: 'Force Low Power TX',
-        required: false, description:
-          'Check to force low transmission power (approximately 3 dBm).' },
       { key: 'tx_interval', type: 'number', label: 'TX Interval (minutes)',
         placeholder: 10, required: false, description:
           'Interval between TX cycles. Must be a multiple of 10 minutes.' },
@@ -373,6 +381,11 @@
       { key: 'max_gps_runtime', type: 'number', label: 'Maximum GPS Runtime',
         required: false, placeholder: 0, description:
           'Maximum GPS runtime per cycle (0 to disable).' },
+      { key: 'enable_lp_sleep', type: 'checkbox',
+        label: 'Enable low-power sleep mode',
+        required: false, description:
+          'Check to enable low-power (0.3mA) sleep mode. Experimental. ' +
+          'Only applies to Vagabond1.' },
       { key: 'temp_offset', type: 'number',
         label: 'Temperature Offset', placeholder: 0,
         required: false, description:
@@ -388,8 +401,8 @@
 
       { key: 'enable_ct', type: 'checkbox',
         label: 'Enable Custom Telemetry', required: false,
-        description: 'Check to enable Custom Telemetry definitions in ' +
-          'nomad_ct.py' }
+        description: 'Check to enable Custom Telemetry definitions. ' +
+          'Requires uploading nomad_ct.py.' }
     ];
 
     // DOM Elements
@@ -811,7 +824,7 @@ print('PING')`;
             });
           } else {
             input = document.createElement('input');
-            input.type = item.type;
+            input.type = 'text';  // item.type;
             input.id = `cfg_${item.key}`;
             if (item.placeholder !== undefined) {
               input.placeholder = item.placeholder;

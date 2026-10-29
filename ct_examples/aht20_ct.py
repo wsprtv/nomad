@@ -11,7 +11,7 @@ from machine import I2C, Pin
 from ahtx0 import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   aht20 = AHT20(i2c)
   # Pack humidity: 1% increments from 0 to 99%
   ct.pack(100, int(aht20.relative_humidity))

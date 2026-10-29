@@ -11,7 +11,7 @@ from machine import I2C, Pin
 from hmc5883l import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   hmc5883l = HMC5883L(i2c)
   (x, y, z) = hmc5883l.read()
   # Pack total field strengh

@@ -11,7 +11,7 @@ from machine import I2C, Pin
 from lsm6ds3 import *
 
 def handle_slot2(ct, slot, **other_args):
-  i2c = I2C(1, scl = Pin(15), sda = Pin(14), freq = 100000)
+  i2c = I2C(0, scl = Pin(10), sda = Pin(9), freq = 100000)
   sensor = LSM6DS3(i2c, address = 0x6b)  # can also be address = 0x6a
   (x, y, z) = sensor.get_readings()[-3:]
   ct.pack(250, int(x * 250 / 32768 + 250))
