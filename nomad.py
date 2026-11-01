@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.014
+# Nomad: U4B-Protocol Tracker v1.015
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -263,7 +263,7 @@ class Tracker:
       if self._num_tx < self._config.num_initial_lp_tx: output_power = 0
       elif self._num_tx < self._config.num_initial_lp_tx + \
           self._config.num_initial_mp_tx: output_power = 1
-    if power == None: power = [3, 10, 13, 17][output_power]
+    if power == None: power = [7, 10, 13, 17][output_power]
     transmitter.send(self.WSPR_BANDS[self._config.band][1] +
         self._cycle_params.freq, output_power, message_type, cs, grid, power)
     Pin(self._board['vfo_i2c'][1], Pin.IN)

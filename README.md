@@ -39,7 +39,7 @@ it into USB).
 the mounted USB mass storage drive. The board will automatically reboot.
 On ESP32 C3 boards, use the
 online [ESP Tool](https://espressif.github.io/esptool-js/) to flash
-the downloaded binary at address 0.
+the downloaded binary at address 0. Then power cycle the board.
 
 ### 2. Upload Firmware and Configuration
 **Method A: Nomad Setup Tool (Recommended)**
@@ -114,14 +114,14 @@ specific hardware).
 or `"vagabond1"`.
 
 **Optional:**
-* `"min_mp_elev"`: *(Integer)* Don't use medium power TX (10 dBm) below this
+* `"min_mp_elev"`: *(Integer)* Disable medium power TX (10 dBm) below this
 solar elevation (in degrees).
-* `"min_hp_elev"`: *(Integer)* Don't use high power TX (13 dBm) below this
+* `"min_hp_elev"`: *(Integer)* Disable high power TX (13 dBm) below this
 solar elevation (in degrees).
-* `"min_uhp_elev"`: *(Integer)* Don't use ultra-high power TX (17 dBm) below
+* `"min_uhp_elev"`: *(Integer)* Disable ultra-high power TX (17 dBm) below
 this solar elevation (in degrees).
 * `"num_initial_lp_tx"`: *(Integer)* Number of TX cycles after startup to
-use low (3 dBm) power. 
+use low (7 dBm) power. 
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
 * `"tx_interval"`: *(Integer)* Interval between TX cycles. Must be
@@ -153,7 +153,7 @@ as defined in the `nomad_ct.py` file.
 If the LED is enabled, Nomad uses the following blink patterns to 
 indicate system status:
 * **No LED Activity:** The `config.json` file is missing, malformed, or 
-the LED is disabled in the config.
+the tracker is waiting to transmit.
 * **Blinking (1Hz):** The system is currently searching for a GPS lock.
 * **Reverse Blinking (1Hz):** The LED is mostly lit and briefly turns off 
 once per second. Indicates a solid GPS lock.
@@ -196,15 +196,13 @@ set `"enable_enhanced_st"` to `true` in `config.json`.
 
 Nomad can be configured to transmit at 4 power levels:
 
-- **Low (LP)**: reported as 3 dBm in regular callsign messages
+- **Low (LP)**: reported as 7 dBm in regular callsign messages
 - **Medium (MP)**: reported as 10 dBm
 - **High (HP)**: reported as 13 dBm
 - **Ultra-High (UHP)**: reported as 17 dBm. Requires a hardware mod
 (except on Vagabond boards).
 
-The advantage of using low power modes is to be able to transmit at lower
-solar angles. The low power mode uses about as much current as running
-the GPS, while HP / UHP may more than double the current requirement.
+Low power modes allow you to transmit at lower solar angles.
 
 The output power is configured using 5 Nomad settings:
 
@@ -214,9 +212,10 @@ The output power is configured using 5 Nomad settings:
 - `num_initial_lp_tx`
 - `num_initial_mp_tx`
 
-The last two settings specify the number of LP / MP transmissions
-after startup. After that, Nomad uses the highest possible power
-allowed by the solar angle. For example, for this configuration:
+The last two settings specify the number of low / medium power 
+transmissions after startup. After that, Nomad uses the highest 
+possible power allowed by the solar angle. For example, for this 
+configuration:
 
 - `min_mp_elev = 15`
 - `min_hp_elev = 20`
@@ -224,11 +223,11 @@ allowed by the solar angle. For example, for this configuration:
 - `num_initial_lp_tx = 1`
 - `num_initial_mp_tx = 1`
 
-Nomad will do one LP and then one MP transmission after startup. Then,
-it will do MP transmissions for solar angles between 15 and 19 degrees,
-HP transmissions for solar angles between 20 and 24 degrees, and
-UHP transmissions at or above 25 degrees. Below 15 degrees,
-Nomad will default to LP.
+Nomad will perform one low power and then one medium power transmission 
+after startup. Then, it will use medium power for solar angles between 
+15 and 19 degrees, high power for solar angles between 20 and 24 
+degrees, and ultra-high power at or above 25 degrees. Below 15 degrees, 
+Nomad will default to low power.
 
 A power mode can be always disabled with `elev = 90` or always enabled
 with `elev = -90`.
@@ -239,13 +238,13 @@ function implementation.
 
 ## Power Optimization ##
 
-By default, Nomad runs GPS whenever it's not transmitting. This ensures
-that the most up-to-date positions are sent. For battery operation,
-an optional `max_gps_runtime` parameter can be specified, which will
-keep GPS powered off until the given number of seconds before the start
-of TX. The recommended setting for battery operation is 180 (3 minutes).
+By default, Nomad runs GPS whenever it is not transmitting, ensuring 
+that the most up-to-date positions are sent. For battery operation, you 
+can optionally specify the `max_gps_runtime` parameter to keep GPS 
+powered off until the specified number of seconds before TX. A 
+recommended setting for battery operation is 180 (3 minutes).
 
-GPS will stop after obtaining a few fixes when `max_gps_runtime > 0`.
+GPS stops after obtaining a few fixes when `max_gps_runtime > 0`.
 
 ## Ultra High Power (UHP) Hardware Modification
 
