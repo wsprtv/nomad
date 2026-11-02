@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.015
+# Nomad: U4B-Protocol Tracker v1.016
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -36,7 +36,7 @@ class Tracker:
     self._reset_gps()
     self._update_gps_position(min_num_fixes = 15)  # to set GPS time
     while True:
-      self._cycle_params = Container()
+      self._cycle_params = Object()
       self._invoke('set_cycle_params', params = self._cycle_params)
       self._wait_until(self._cycle_params.gps_start_ts)
       self._update_gps_position(self._cycle_params.gps_stop_ts)
@@ -58,8 +58,6 @@ class Tracker:
     params.gps_start_ts = (params.tx_start_ts - config.max_gps_runtime - 1) \
         if config.max_gps_runtime else 0
     params.gps_stop_ts = params.tx_start_ts - 1
-    params.freq = config.freq
-    params.output_power = None  # let the transmitter decide
 
   def _should_tx(self, **_):
     return self._get_time() - self._last_pos.ts < 500 and \
@@ -129,7 +127,7 @@ class Tracker:
   def _read_config(self):
     with open('config.json', 'r') as f:
       c = json.load(f)
-      config = self._config = Container()
+      config = self._config = Object()
       config.callsign = c['callsign'].upper()
       if not re.match(r'^\w\w\w\w\w?\w?\w?(/\w|/[1-9][0-9])?$',
           config.callsign) or '_' in config.callsign: raise Exception
@@ -196,8 +194,9 @@ class Tracker:
       if num_fixes >= min_num_fixes and \
           (self._config.max_gps_runtime or not deadline): break
     if (not self._last_pos and self._get_uptime() > 1800) or \
-       (self._last_pos and self._get_time() - self._last_pos.ts > 1800):
-      # No GPS fix in 30 minutes, try resetting
+       (self._last_pos and not self._config.max_gps_runtime and
+        self._get_time() - self._last_pos.ts > 1800):
+      # No GPS fix in a long time, try resetting
       machine.reset()
     self._stop_gps()
 
@@ -255,7 +254,8 @@ class Tracker:
     (id, scl, sda) = self._board['vfo_i2c']
     i2c = I2C(id, scl = Pin(scl), sda = Pin(sda), freq = 100000)
     transmitter = WSPRTransmitter(i2c, self._watchdog, self._config.xo_freq)
-    output_power = self._cycle_params.output_power
+    freq = getattr(self._cycle_params, 'freq', self._config.freq)
+    output_power = getattr(self._cycle_params, 'output_power', None)
     if output_power == None:
       output_power = max(i for (i, v) in enumerate(
           [-90, self._config.min_mp_elev, self._config.min_hp_elev,
@@ -265,7 +265,7 @@ class Tracker:
           self._config.num_initial_mp_tx: output_power = 1
     if power == None: power = [7, 10, 13, 17][output_power]
     transmitter.send(self.WSPR_BANDS[self._config.band][1] +
-        self._cycle_params.freq, output_power, message_type, cs, grid, power)
+        freq, output_power, message_type, cs, grid, power)
     Pin(self._board['vfo_i2c'][1], Pin.IN)
     Pin(self._board['vfo_i2c'][2], Pin.IN)
     self._vfo_pwr.off()
@@ -311,7 +311,7 @@ class Tracker:
       'gps_pwr': ([3, 4], False, { 'drive': 3 }), 'gps_vbat': [[1]],
       'led': ([8], True), 'vsense': (0, 5.7), 'uc': 'ESP32C3' } }
 
-class Container: pass
+class Object: pass
 
 class CustomTelemetry:
   def __init__(self):
