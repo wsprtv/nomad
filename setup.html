@@ -325,8 +325,8 @@
         description: 'The transmission band.' },
       { key: 'xo_freq', type: 'number', label: 'Crystal Frequency',
         required: true, default: 26000000, description:
-          'The frequency of your crystal (adjust according to your ' +
-          'specific hardware).' },
+          'The frequency of your crystal (most trackers use 26000000, ' +
+          'but you can adjust according to your specific hardware).' },
       { key: 'board', type: 'select', label: 'Board Type', required: true,
         options: ['ag6ns', 'jawbone', 'traquito', 'traquito2', 'vagabond1'],
         description: 'The target hardware you are running this on.' },
@@ -336,37 +336,43 @@
       { key: 'min_mp_elev', type: 'number',
         label: 'Minimum Solar Elevation for Medium Power TX', placeholder: -90,
         required: false, description:
-          'Enable medium TX power (10 dBm) when solar elevation ' +
-          'is not below this threshold (in degrees).' },
+          'Disable medium power TX (10 dBm) when solar elevation ' +
+          'is below this threshold (in degrees).' },
       { key: 'min_hp_elev', type: 'number',
         label: 'Minimum Solar Elevation for High Power TX', placeholder: 20,
         required: false, description:
-          'Enable high TX power (13 dBm) when solar elevation ' +
-          'is not below this threshold (in degrees).' },
+          'Disable high power TX (13 dBm) when solar elevation ' +
+          'is below this threshold (in degrees).' },
       { key: 'min_uhp_elev', type: 'number',
         label: 'Minimum Solar Elevation for Ultra High Power TX',
         placeholder: 90, required: false, description:
-          'Enable ultra-high TX power (17 dBm) when solar ' +
-          'elevation is not below this threshold (in degrees). ' +
+          'Disable ultra-high power TX (17 dBm) when solar ' +
+          'elevation is below this threshold (in degrees). ' +
           '<i>WARNING: leave at 90 (always turned off) unless you are sure ' +
           'that your board supports ultra-high power.</i>' },
       { key: 'num_initial_lp_tx', type: 'number',
-        label: 'Initial Number of TX Cycles at Low Power', placeholder: 0,
+        label: 'Initial Number of TX Cycles at Low Power', placeholder: 1,
         required: false, description:
-          'Number of TX cycles after startup to use low (3 dBm) power.' },
+          'Number of TX cycles after startup to use low (7 dBm) power.' },
       { key: 'num_initial_mp_tx', type: 'number',
         label: 'Initial Number of TX Cycles at Medium Power', placeholder: 1,
         required: false, description:
           'Number of TX cycles after startup to use medium (10 dBm) power.' },
-      { key: 'tx_interval', type: 'number', label: 'TX Interval (minutes)',
+      { key: 'tx_interval', type: 'number', label: 'TX Interval',
         placeholder: 10, required: false, description:
-          'Interval between TX cycles. Must be a multiple of 10 minutes.' },
+          'Interval between TX cycles (in minutes). ' +
+          'Must be a multiple of 10 minutes.' },
       { key: 'disable_st', type: 'checkbox',
         label: 'Disable Standard Telemetry', required: false, description:
           'Check to send regular callsign messages only (WSPR beacon mode).' },
       { key: 'enable_enhanced_st', type: 'checkbox',
         label: 'Enable Enhanced Standard Telemetry', required: false,
         description: 'Check to send enhanced standard telemetry in slot 2.' },
+      { key: 'max_enhanced_st_altitude', type: 'number',
+        label: 'Maximum Enhanced Standard Telemetry Altitude',
+        required: false, placeholder: 99999, description:
+          'When enhanced standard telemetry is enabled, only send it at' +
+          ' or below this altitude (in meters).' },
       { key: 'geofenced_grids', type: 'text', label: 'Geofenced Grids',
         placeholder: '', required: false, description:
           'Comma-separated list of Maidenhead grid squares where ' +
@@ -378,18 +384,19 @@
       { key: 'disable_watchdog', type: 'checkbox', label: 'Disable Watchdog',
         required: false, description:
           'Check to disable the hardware watchdog (useful for debugging).' },
-      { key: 'max_gps_runtime', type: 'number', label: 'Maximum GPS Runtime',
-        required: false, placeholder: 0, description:
-          'Maximum GPS runtime per cycle (0 to disable).' },
       { key: 'enable_lp_sleep', type: 'checkbox',
         label: 'Enable low-power sleep mode',
         required: false, description:
           'Check to enable low-power (0.3mA) sleep mode. Experimental. ' +
           'Only applies to Vagabond1.' },
+      { key: 'max_gps_runtime', type: 'number', label: 'Maximum GPS Runtime',
+        required: false, placeholder: 0, description:
+          'Maximum GPS runtime per cycle (in seconds, ' +
+          'use 0 for unlimited runtime).' },
       { key: 'temp_offset', type: 'number',
         label: 'Temperature Offset', placeholder: 0,
         required: false, description:
-            'Temperature sensor correction in degrees C. A positive ' +
+            'Temperature sensor correction (in degrees C). A positive ' +
             'offset increases the reported temperature.' },
       { key: 'voltage_cal', type: 'number',
         label: 'Voltage Calibration', placeholder: '1.00',

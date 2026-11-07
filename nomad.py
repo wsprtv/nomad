@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.016
+# Nomad: U4B-Protocol Tracker v1.017
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -80,6 +80,7 @@ class Tracker:
 
   def _handle_slot2(self, ct, slot, **_):
     pos = self._last_pos
+    if pos.altitude > self._config.max_enhanced_st_altitude: return
     if ((self._get_time() - slot * 120) // 600) % 2 == 0:
       ct.pack(330, self._num_tx)
     else:
@@ -126,40 +127,40 @@ class Tracker:
 
   def _read_config(self):
     with open('config.json', 'r') as f:
-      c = json.load(f)
-      config = self._config = Object()
-      config.callsign = c['callsign'].upper()
+      j = json.load(f)
+      c = self._config = Object()
+      c.callsign = j['callsign'].upper()
       if not re.match(r'^\w\w\w\w\w?\w?\w?(/\w|/[1-9][0-9])?$',
-          config.callsign) or '_' in config.callsign: raise Exception
-      config.channel = int(c['channel'])
-      if config.channel < 0 or config.channel > 599: raise Exception
-      config.band = c['band'].lower()
-      if not config.band in self.WSPR_BANDS: raise Exception
-      config.start_minute = \
-          (self.WSPR_BANDS[config.band][0] + (config.channel % 5) * 2) % 10
-      config.freq = [20, 60, 140, 180][(config.channel % 20) // 5]
-      config.xo_freq = int(c['xo_freq'])
-      config.cs1 = ['0', '1', 'Q'][config.channel // 200]
-      config.cs3 = chr(ord('0') + (config.channel // 20) % 10)
-      config.min_mp_elev = int(c.get('min_mp_elev', -90))
-      config.min_hp_elev = int(c.get('min_hp_elev', 20))
-      config.min_uhp_elev = int(c.get('min_uhp_elev', 90))
-      config.num_initial_lp_tx = int(c.get('num_initial_lp_tx', 0))
-      config.num_initial_mp_tx = int(c.get('num_initial_mp_tx', 1))
-      config.tx_interval = 600 * max(1, c.get('tx_interval', 10) // 10)
-      config.disable_st = c.get('disable_st', False)
-      config.enable_enhanced_st = c.get('enable_enhanced_st', False)
-      config.disable_led = c.get('disable_led', False)
-      config.disable_watchdog = c.get('disable_watchdog', False)
-      config.geofenced_grids = c.get('geofenced_grids', [])
-      config.max_gps_runtime = c.get('max_gps_runtime', None)
-      config.enable_lp_sleep = c.get('enable_lp_sleep', False)
-      config.enable_ct = c.get('enable_ct', False)
-      config.temp_offset = c.get('temp_offset', 0)
-      config.voltage_cal = c.get('voltage_cal', 1)
-      config.board = c['board']
-      self._board = self.BOARDS[config.board]
-    return config
+          c.callsign) or '_' in c.callsign: raise Exception
+      c.channel = int(j['channel'])
+      if c.channel < 0 or c.channel > 599: raise Exception
+      c.band = j['band'].lower()
+      if not c.band in self.WSPR_BANDS: raise Exception
+      c.start_minute = (self.WSPR_BANDS[c.band][0] + (c.channel % 5) * 2) % 10
+      c.freq = [20, 60, 140, 180][(c.channel % 20) // 5]
+      c.xo_freq = int(j['xo_freq'])
+      c.cs1 = ['0', '1', 'Q'][c.channel // 200]
+      c.cs3 = chr(ord('0') + (c.channel // 20) % 10)
+      c.min_mp_elev = int(j.get('min_mp_elev', -90))
+      c.min_hp_elev = int(j.get('min_hp_elev', 20))
+      c.min_uhp_elev = int(j.get('min_uhp_elev', 90))
+      c.num_initial_lp_tx = int(j.get('num_initial_lp_tx', 1))
+      c.num_initial_mp_tx = int(j.get('num_initial_mp_tx', 1))
+      c.tx_interval = 600 * max(1, j.get('tx_interval', 10) // 10)
+      c.disable_st = j.get('disable_st', False)
+      c.enable_enhanced_st = j.get('enable_enhanced_st', False)
+      c.max_enhanced_st_altitude = j.get('max_enhanced_st_altitude', 99999)
+      c.disable_led = j.get('disable_led', False)
+      c.disable_watchdog = j.get('disable_watchdog', False)
+      c.geofenced_grids = j.get('geofenced_grids', [])
+      c.enable_lp_sleep = j.get('enable_lp_sleep', False)
+      c.max_gps_runtime = j.get('max_gps_runtime', None)
+      c.enable_ct = j.get('enable_ct', False)
+      c.temp_offset = j.get('temp_offset', 0)
+      c.voltage_cal = j.get('voltage_cal', 1)
+      c.board = j['board']
+      self._board = self.BOARDS[c.board]
+    return c
 
   def _update_gps_position(self, deadline = None, min_num_fixes = 5):
     self._start_gps()
@@ -598,7 +599,7 @@ class RP2040:
 
 class RP2350(RP2040):
   def __init__(self):
-    if mem32[0x40038010] & (3 << 10):
+    if mem32[0x50110050] & (1 << 16):
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)

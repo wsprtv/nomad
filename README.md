@@ -124,12 +124,14 @@ this solar elevation (in degrees).
 use low (7 dBm) power. 
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
-* `"tx_interval"`: *(Integer)* Interval between TX cycles. Must be
-a multiple of 10 minutes.
+* `"tx_interval"`: *(Integer)* Interval between TX cycles (in minutes).
+Must be a multiple of 10 minutes.
 * `"disable_st"`: *(Boolean)* Set to `true` to send regular callsign 
 messages only (WSPR beacon mode).
 * `"enable_enhanced_st"`: *(Boolean)* Set to `true` to send enhanced 
-standard telemetry.
+standard telemetry in slot 2.
+* `"max_enhanced_st_altitude"`: *(Integer)* When enhanced standard telemetry
+is enabled, only send it at or below this altitude (in meters).
 * `"disable_led"`: *(Boolean)* Set to `true` to disable all LED activity 
 (useful for saving power).
 * `"disable_watchdog"`: *(Boolean)* Set to `true` to disable the hardware 
@@ -137,11 +139,11 @@ watchdog (useful for debugging).
 * `"geofenced_grids"`: *(Array of Strings)* List of Maidenhead grid2, grid4,
 or grid6 squares where transmission is disabled
 (e.g., `["DO87", "DN", "DM87ar"]`).
-* `"max_gps_runtime"`: *(Integer)* Run GPS for at most this many seconds
-per cycle (useful for battery operation)
 * `"enable_lp_sleep"`: *(Boolean)* Set to `true` to enable low-power
 (0.3mA) sleep mode. Experimental. Only applies to Vagabond1.
-* `"temp_offset"`: *(Integer)* Temperature sensor correction in degrees C.
+* `"max_gps_runtime"`: *(Integer)* Run GPS for at most this many seconds
+per cycle (useful for battery operation)
+* `"temp_offset"`: *(Integer)* Temperature sensor correction (in degrees C).
 A positive offset increases the reported temperature.
 * `"voltage_cal"`: *(Float)* Voltage calibration factor. Set to > 1.0 to
 increase the reported voltage.
