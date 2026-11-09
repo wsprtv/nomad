@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.017
+# Nomad: U4B-Protocol Tracker v1.018
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -576,15 +576,13 @@ class Switch:
     except:
       pass
 
-class RP2040:
+class _RP2:
   def __init__(self):
     if mem32[0x50110050] & (1 << 16):
       machine.freq(48000000)  # USB connected
     else:
       machine.freq(18000000)
-      # Disable unused peripherals in sleep mode
-      mem32[0x4000b0a8] = ~0x200000
-      mem32[0x4000b0ac] = ~0x13e0
+      self._config_sleep_mode()
 
   def get_voltage(self, pin, multiplier):
     v = sum([ADC(pin).read_u16() for i in range(8)]) / 8
@@ -597,12 +595,15 @@ class RP2040:
   def light_sleep(self, ms):
     time.sleep_ms(ms)
 
-class RP2350(RP2040):
-  def __init__(self):
-    if mem32[0x50110050] & (1 << 16):
-      machine.freq(48000000)  # USB connected
-    else:
-      machine.freq(18000000)
+class RP2040(_RP2):
+  def _config_sleep_mode(self):
+    mem32[0x4000b0a8] = ~0x200000
+    mem32[0x4000b0ac] = ~0x13e0
+
+class RP2350(_RP2):
+  def _config_sleep_mode(self):
+    mem32[0x400130b4] = ~0x01800000
+    mem32[0x400130b8] = ~0x13ce0000
 
 class ESP32C3:
   def __init__(self):
