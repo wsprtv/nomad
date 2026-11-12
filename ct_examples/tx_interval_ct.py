@@ -1,5 +1,4 @@
 # Voltage-dependent TX interval
-# Rename to nomad_ct.py before uploading
 
 def set_cycle_params(params, get_voltage, default_handler, **other_args):
   default_handler()

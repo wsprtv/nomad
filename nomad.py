@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.018
+# Nomad: U4B-Protocol Tracker v1.019
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -52,11 +52,11 @@ class Tracker:
       self._num_tx += 1
 
   def _set_cycle_params(self, params, **_):
-    config = self._config
-    params.tx_start_ts = ((self._get_time() - config.start_minute * 60) // \
-        config.tx_interval + 1) * config.tx_interval + config.start_minute * 60
-    params.gps_start_ts = (params.tx_start_ts - config.max_gps_runtime - 1) \
-        if config.max_gps_runtime else 0
+    c = self._config
+    params.tx_start_ts = ((self._get_time() - c.start_minute * 60) // \
+        (c.tx_period * 600) + 1) * c.tx_period * 600 + c.start_minute * 60
+    params.gps_start_ts = (params.tx_start_ts - c.max_gps_runtime - 1) \
+        if c.max_gps_runtime else 0
     params.gps_stop_ts = params.tx_start_ts - 1
 
   def _should_tx(self, **_):
@@ -138,15 +138,15 @@ class Tracker:
       if not c.band in self.WSPR_BANDS: raise Exception
       c.start_minute = (self.WSPR_BANDS[c.band][0] + (c.channel % 5) * 2) % 10
       c.freq = [20, 60, 140, 180][(c.channel % 20) // 5]
-      c.xo_freq = int(j['xo_freq'])
       c.cs1 = ['0', '1', 'Q'][c.channel // 200]
       c.cs3 = chr(ord('0') + (c.channel // 20) % 10)
+      c.xo_freq = int(j.get('xo_freq', 26000000))
       c.min_mp_elev = int(j.get('min_mp_elev', -90))
       c.min_hp_elev = int(j.get('min_hp_elev', 20))
       c.min_uhp_elev = int(j.get('min_uhp_elev', 90))
       c.num_initial_lp_tx = int(j.get('num_initial_lp_tx', 1))
       c.num_initial_mp_tx = int(j.get('num_initial_mp_tx', 1))
-      c.tx_interval = 600 * max(1, j.get('tx_interval', 10) // 10)
+      c.tx_period = max(1, int(j.get('tx_period', 1)))
       c.disable_st = j.get('disable_st', False)
       c.enable_enhanced_st = j.get('enable_enhanced_st', False)
       c.max_enhanced_st_altitude = j.get('max_enhanced_st_altitude', 99999)

@@ -1,5 +1,4 @@
 # AS7341 spectral sensor
-# Rename to nomad_ct.py before uploading
 #
 # Driver (download both files):
 # https://gitlab.com/robhamerling/micropython-as7341/-/blob/main/as7341.py

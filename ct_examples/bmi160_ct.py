@@ -1,5 +1,4 @@
 # BMI160 accelerometer / gyroscope
-# Rename to nomad_ct.py before uploading
 #
 # Driver (download both files):
 # https://github.com/DanielBustillos/bmi160-micropython-driver/blob/main/bmi160.py

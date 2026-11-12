@@ -1,5 +1,4 @@
 # LSM6DS3 accelerometer / gyroscope
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/pimoroni/lsm6ds3-micropython/blob/main/src/lsm6ds3.py
 #

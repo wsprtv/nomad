@@ -1,5 +1,4 @@
 # AHT20 temperature / humidity sensor
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/targetblank/micropython_ahtx0/blob/master/ahtx0.py
 #

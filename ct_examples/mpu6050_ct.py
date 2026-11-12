@@ -1,5 +1,4 @@
 # MPU6050 accelerometer / gyroscope
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/TimHanewich/MicroPython-Collection/blob/master/MPU6050/MPU6050.py
 #

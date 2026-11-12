@@ -1,5 +1,4 @@
 # HMC5883L 3-axis digital magnetometer
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/almonde/micropython-hmc5883l/blob/main/hmc5883l.py
 #

@@ -95,7 +95,6 @@ a minimal configuration example:
   "callsign": "N0CALL",
   "channel": 1,
   "band": "20m",
-  "xo_freq": 26000000,
   "board": "your_board"
 }
 ```
@@ -107,13 +106,13 @@ a minimal configuration example:
 a suffix (e.g. N0CALL/22).
 * `"channel"`: Your designated U4B channel.
 * `"band"`: The transmission band. Accepts values from `"2200m"` up to `"6m"`.
-* `"xo_freq"`: The frequency of your crystal (adjust according to your 
-specific hardware).
 * `"board"`: The target hardware. Must be one of `"ag6ns"`,
 `"jawbone"`, `"traquito"`, `"traquito2"` (Jetpack with a Pico 2 board),
 or `"vagabond1"`.
 
 **Optional:**
+* `"xo_freq"`: The frequency of your crystal (adjust according to your 
+specific hardware).
 * `"min_mp_elev"`: *(Integer)* Disable medium power TX (10 dBm) below this
 solar elevation (in degrees).
 * `"min_hp_elev"`: *(Integer)* Disable high power TX (13 dBm) below this
@@ -124,8 +123,9 @@ this solar elevation (in degrees).
 use low (7 dBm) power. 
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
 use medium (10 dBm) power. 
-* `"tx_interval"`: *(Integer)* Interval between TX cycles (in minutes).
-Must be a multiple of 10 minutes.
+* `"tx_period"`: *(Integer)* TX period (in 10-minute cycles). For example,
+if `tx_period = 3`, Nomad will transmit U4B telemetry every 30 minutes,
+not every 10.
 * `"disable_st"`: *(Boolean)* Set to `true` to send regular callsign 
 messages only (WSPR beacon mode).
 * `"enable_enhanced_st"`: *(Boolean)* Set to `true` to send enhanced 
@@ -365,7 +365,7 @@ driver.
    [BME280 repository](https://github.com/robert-hh/BME280).
 3. Open the [Nomad Setup Tool](https://wsprtv.com/nomad/setup.html) and connect
    to your board.
-4. **Uncheck** "Save as main.py", click **Upload Local File**,
+4. Change "Save as main.py" to "Preserve filename", click **Upload Local File**,
    and select your downloaded `bme280_float.py` file.
 
 ### 3. Testing the Sensor Interface
@@ -437,9 +437,9 @@ or Extended Telemetry (ET0 USER_DEFINED), by adding the correct headers
 with`ct.pack_ct_header(slot)` or `ct.pack_et0_header(slot, hdr_type = 0)`. 
 
 5\. Connect to the board using the setup tool.
-   Upload the latest `nomad.py` from Github. **Uncheck** the
-   "Save as main.py" box, then click **Upload Local File** to
-   install `nomad_ct.py`.
+   Upload the latest `nomad.py` from Github. Then, change
+   "Save as main.py" to "Save as nomad_ct.py" and click
+   **Upload Local File** to install `nomad_ct.py`.
 
 6\. Re-connect the board to initiate test transmissions.
 

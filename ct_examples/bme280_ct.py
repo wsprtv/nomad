@@ -1,5 +1,4 @@
 # BME280 pressure / temperature / humidity sensor
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/robert-hh/BME280/blob/master/bme280_float.py
 #

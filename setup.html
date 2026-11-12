@@ -189,17 +189,6 @@
       display: flex;
       align-items: center;
     }
-    #save_as_main_label {
-      font-size: 13px;
-      color: #777;
-      margin-left: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-    #save_as_main_chk {
-      margin: 0 5px 0 0;
-    }
     #save_config_btn {
       display: none;
       background-color: #5c9e5c;
@@ -265,10 +254,11 @@
           <button id="upload_local_btn"
             class="blue_button" style="margin: 0;"
             disabled>Upload Local File</button>
-          <label id="save_as_main_label">
-            <input type="checkbox" id="save_as_main_chk"
-              checked> Save as main.py
-          </label>
+          <select id="save_as_select" style="width: auto; margin-left: 10px">
+            <option value="main.py" selected>Save as main.py</option>
+            <option value="nomad_ct.py">Save as nomad_ct.py</option>
+            <option value="preserve">Preserve filename</option>
+          </select>
         </div>
       </div>
       <div class="box">
@@ -323,16 +313,16 @@
         options: ['2200m', '630m', '160m', '80m', '60m', '40m', '30m', '20m',
                   '17m', '15m', '12m', '10m', '6m'], default: '20m',
         description: 'The transmission band.' },
-      { key: 'xo_freq', type: 'number', label: 'Crystal Frequency',
-        required: true, default: 26000000, description:
-          'The frequency of your crystal (most trackers use 26000000, ' +
-          'but you can adjust according to your specific hardware).' },
       { key: 'board', type: 'select', label: 'Board Type', required: true,
         options: ['ag6ns', 'jawbone', 'traquito', 'traquito2', 'vagabond1'],
         description: 'The target hardware you are running this on.' },
 
       { section: 'Optional Settings' },
 
+      { key: 'xo_freq', type: 'number', label: 'Crystal Frequency',
+        required: false, placeholder: 26000000, description:
+          'The frequency of your crystal (most trackers use 26000000, ' +
+          'but you can adjust according to your specific hardware).' },
       { key: 'min_mp_elev', type: 'number',
         label: 'Minimum Solar Elevation for Medium Power TX', placeholder: -90,
         required: false, description:
@@ -358,10 +348,10 @@
         label: 'Initial Number of TX Cycles at Medium Power', placeholder: 1,
         required: false, description:
           'Number of TX cycles after startup to use medium (10 dBm) power.' },
-      { key: 'tx_interval', type: 'number', label: 'TX Interval',
-        placeholder: 10, required: false, description:
-          'Interval between TX cycles (in minutes). ' +
-          'Must be a multiple of 10 minutes.' },
+      { key: 'tx_period', type: 'number', label: 'TX Period',
+        placeholder: 1, required: false, description:
+          'TX period (in 10-minute cycles). A value of 3 means "transmit ' +
+          'every 30 minutes".'},
       { key: 'disable_st', type: 'checkbox',
         label: 'Disable Standard Telemetry', required: false, description:
           'Check to send regular callsign messages only (WSPR beacon mode).' },
@@ -724,9 +714,9 @@ print('PING')`;
       const file = file_input.files[0];
       if (!file) return;
 
-      // Determine target filename based on checkbox state
-      const save_as_main = document.getElementById('save_as_main_chk').checked;
-      const target_filename = save_as_main ? "main.py" : file.name;
+      // Determine target filename based on select menu state
+      const save_mode = document.getElementById('save_as_select').value;
+      const target_filename = save_mode === "preserve" ? file.name : save_mode;
 
       const file_reader = new FileReader();
       file_reader.onload = async function(e) {

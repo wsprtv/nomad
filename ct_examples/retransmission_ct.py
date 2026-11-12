@@ -1,5 +1,4 @@
 # Spot retransmission
-# Rename to nomad_ct.py before uploading
 #
 # WSPR TV CT params
 # (import into https://wsprtv.com/tools/ct_wizard.html to customize):

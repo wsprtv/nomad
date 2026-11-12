@@ -1,5 +1,4 @@
 # MS5607 pressure / temperature sensor
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/ph-wheels/ms5607/blob/master/ms5607.py
 #

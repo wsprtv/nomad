@@ -1,5 +1,4 @@
 # MPU6500 accelerometer / gyroscope
-# Rename to nomad_ct.py before uploading
 #
 # Driver
 # https://github.com/tuupola/micropython-mpu9250/blob/master/mpu6500.py

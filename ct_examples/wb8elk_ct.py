@@ -1,5 +1,4 @@
 # WB8ELK protocol TX
-# Rename to nomad_ct.py before uploading
 
 import random
 

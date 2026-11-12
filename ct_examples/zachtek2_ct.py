@@ -1,5 +1,4 @@
 # Zachtek2 protocol TX
-# Rename to nomad_ct.py before uploading
 
 import random
 

@@ -1,5 +1,4 @@
 # VEML7700 light sensor
-# Rename to nomad_ct.py before uploading
 #
 # Driver: https://github.com/palouf34/veml7700/blob/master/veml7700.py
 #
