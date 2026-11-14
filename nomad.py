@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.019
+# Nomad: U4B-Protocol Tracker v1.020
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -61,7 +61,7 @@ class Tracker:
 
   def _should_tx(self, **_):
     return self._get_time() - self._last_pos.ts < 500 and \
-        not self._is_geofenced(self._last_pos.get_grid())
+        not self._last_pos.get_grid().startswith(self._config.geofenced_grids)
 
   def _handle_slot0(self, ct, **_):
     ct.wspr_message = \
@@ -146,13 +146,14 @@ class Tracker:
       c.min_uhp_elev = int(j.get('min_uhp_elev', 90))
       c.num_initial_lp_tx = int(j.get('num_initial_lp_tx', 1))
       c.num_initial_mp_tx = int(j.get('num_initial_mp_tx', 1))
+      c.max_grid_tx_power = j.get('max_grid_tx_power', [])
       c.tx_period = max(1, int(j.get('tx_period', 1)))
       c.disable_st = j.get('disable_st', False)
       c.enable_enhanced_st = j.get('enable_enhanced_st', False)
       c.max_enhanced_st_altitude = j.get('max_enhanced_st_altitude', 99999)
       c.disable_led = j.get('disable_led', False)
       c.disable_watchdog = j.get('disable_watchdog', False)
-      c.geofenced_grids = j.get('geofenced_grids', [])
+      c.geofenced_grids = tuple(j.get('geofenced_grids', []))
       c.enable_lp_sleep = j.get('enable_lp_sleep', False)
       c.max_gps_runtime = j.get('max_gps_runtime', None)
       c.enable_ct = j.get('enable_ct', False)
@@ -258,24 +259,22 @@ class Tracker:
     freq = getattr(self._cycle_params, 'freq', self._config.freq)
     output_power = getattr(self._cycle_params, 'output_power', None)
     if output_power == None:
-      output_power = max(i for (i, v) in enumerate(
+      output_power = max(i + 1 for (i, v) in enumerate(
           [-90, self._config.min_mp_elev, self._config.min_hp_elev,
            self._config.min_uhp_elev]) if self._get_solar_elevation() >= v)
-      if self._num_tx < self._config.num_initial_lp_tx: output_power = 0
+      if self._num_tx < self._config.num_initial_lp_tx: output_power = 1
       elif self._num_tx < self._config.num_initial_lp_tx + \
-          self._config.num_initial_mp_tx: output_power = 1
-    if power == None: power = [7, 10, 13, 17][output_power]
+          self._config.num_initial_mp_tx: output_power = 2
+    grid6 = self._last_pos.get_grid()
+    for v in self._config.max_grid_tx_power:
+      if grid6.startswith(v[0]): output_power = min(output_power, v[1])
+    if power == None: power = [0, 7, 10, 13, 17][output_power]
     transmitter.send(self.WSPR_BANDS[self._config.band][1] +
         freq, output_power, message_type, cs, grid, power)
     Pin(self._board['vfo_i2c'][1], Pin.IN)
     Pin(self._board['vfo_i2c'][2], Pin.IN)
     self._vfo_pwr.off()
     self._led.off()
-
-  def _is_geofenced(self, grid6):
-    return grid6 in self._config.geofenced_grids or \
-        grid6[:4] in self._config.geofenced_grids or \
-        (grid6[0] + grid6[2]) in self._config.geofenced_grids
 
   def _get_solar_elevation(self):
     if not (pos := self._last_pos): return -90
@@ -391,7 +390,7 @@ class WSPRTransmitter:
     self._watchdog = watchdog
     self._xo_freq = xo_freq
 
-  # output_power: 0 = 3dBm, 1 = 10dBm, 2 = 13Bm, 3 = 15dBm
+  # output_power: 0 = 0dBm, 1 = 7dBm, 2 = 10Bm, 3 = 13dBm, 4 = 17dBm
   def send(self, freq, output_power, message_type, cs, grid, power):
     symbols = self._generate_symbols(message_type, cs, grid, power)
     if not symbols: return False
@@ -408,24 +407,21 @@ class WSPRTransmitter:
     self._disable_outputs()
     return True
 
-  def _initialize(self, output_power):
-    # Wait for vfo to start up
+  def _initialize(self, power):
     while self._i2c.readfrom_mem(0x60, 0x00, 1)[0] & 0x80: pass
     self._disable_outputs()
-    drive = [1, 3][output_power > 0]
-    clock_regs = bytes([0x4c | drive] + [[0x5f, 0x83][output_power < 2]] + \
-        [[0x5f, 0x83][output_power < 2]] + [0x83] * 5)
-    # Select XTAL inputs, set clocks, set disable state
-    self._i2c.writeto_mem(0x60, 15, b'\x00' + clock_regs + b'\x20')
+    drive = [0, 1, 3, 3, 3][power]
+    clock_regs = [0x4c | drive] + [[0x5f, 0x83][power < 3]] * 2 + [0x83] * 5
+    self._i2c.writeto_mem(0x60, 15, b'\x00' + bytes(clock_regs) + b'\x20')
 
-  def _set_frequency(self, freq, output_power):
+  def _set_frequency(self, freq, power):
     if not self._compute_freq_params(freq): return False
     msx_p1 = 128 * self._d - 512
     r_log = len(bin(self._r)) - 3
     regs = bytes([0, 0x01,
       (r_log << 4) | (0xc if (self._d == 4) else 0) | ((msx_p1 >> 16) & 3),
       (msx_p1 >> 8) & 0xff, msx_p1 & 0xff, 0, 0, 0])
-    self._i2c.writeto_mem(0x60, 42, regs * max(1, output_power))
+    self._i2c.writeto_mem(0x60, 42, regs * max(1, power - 1))
     self._update_fmd()
     self._i2c.writeto_mem(0x60, 177, b'\x20')  # reset PLL
     return True
@@ -440,8 +436,8 @@ class WSPRTransmitter:
       (msnx_p2 >> 8) & 0xff, msnx_p2 & 0xff])
     self._i2c.writeto_mem(0x60, 26, regs)
 
-  def _enable_outputs(self, output_power):
-    self._i2c.writeto_mem(0x60, 3, bytes([b'\xfe\xfe\xfc\xf8'[output_power]]))
+  def _enable_outputs(self, power):
+    self._i2c.writeto_mem(0x60, 3, bytes([b'\xfe\xfe\xfe\xfc\xf8'[power]]))
 
   def _disable_outputs(self):
     self._i2c.writeto_mem(0x60, 3, b'\xff')

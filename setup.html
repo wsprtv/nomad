@@ -143,6 +143,9 @@
       font-size: 13px; 
       border-radius: 4px;
     }
+    .schema-section:first-child {
+      margin-top: 5px;
+    }
     textarea {
       width: 100%;
       font-family: monospace;
@@ -158,6 +161,15 @@
       font-size: 13px;
       color: #444;
       margin-top: 10px;
+    }
+    .tip {
+      font-size: 13px;
+      color: #555;
+      background: #fff9e6;
+      border: 1px solid #eedd99;
+      padding: 8px 12px;
+      margin: -5px 0 15px 0;
+      border-radius: 4px;
     }
     #cmd_input {
       background: #fff;
@@ -304,6 +316,8 @@
 
     // Configuration file schema definition
     const config_schema = [
+      { section: 'Required Settings' },
+
       { key: 'callsign', type: 'text', label: 'Callsign', required: true,
         description: 'Your amateur radio callsign. (e.g., N0CALL)' },
       { key: 'channel', type: 'number', label: 'Channel', required: true,
@@ -337,9 +351,7 @@
         label: 'Minimum Solar Elevation for Ultra High Power TX',
         placeholder: 90, required: false, description:
           'Disable ultra-high power TX (17 dBm) when solar ' +
-          'elevation is below this threshold (in degrees). ' +
-          '<i>WARNING: leave at 90 (always turned off) unless you are sure ' +
-          'that your board supports ultra-high power.</i>' },
+          'elevation is below this threshold (in degrees).'  },
       { key: 'num_initial_lp_tx', type: 'number',
         label: 'Initial Number of TX Cycles at Low Power', placeholder: 1,
         required: false, description:
@@ -348,6 +360,12 @@
         label: 'Initial Number of TX Cycles at Medium Power', placeholder: 1,
         required: false, description:
           'Number of TX cycles after startup to use medium (10 dBm) power.' },
+      { key: 'max_grid_tx_power', type: 'text', label: 'Maximum Grid TX Power',
+        placeholder: '', required: false, description:
+          'Comma-separated list of per-grid TX power limits. ' +
+          'Maidenhead grid square can be in grid2, grid4 or grid6 formats. ' +
+          'Allowed power values are 0-4, where 0=ULP, 1=LP, 2=MP, 3=HP, ' +
+          'and 4=UHP. Example: CN=0, DN87=2, EM65ar=3.' },
       { key: 'tx_period', type: 'number', label: 'TX Period',
         placeholder: 1, required: false, description:
           'TX period (in 10-minute cycles). A value of 3 means "transmit ' +
@@ -763,6 +781,21 @@ print('PING')`;
           sec.className = 'schema-section';
           sec.innerText = item.section;
           config_editor.appendChild(sec);
+
+          if (item.section === 'Required Settings') {
+            const tip = document.createElement('div');
+            tip.className = 'tip';
+            tip.innerHTML = 'Remember to click "Save Configuration" after making ' +
+                'any changes to settings.';
+            config_editor.appendChild(tip);
+          }
+          if (item.section === 'Optional Settings') {
+            const tip = document.createElement('div');
+            tip.className = 'tip';
+            tip.innerHTML = 'Leave at default values ' +
+                'if unsure.';
+            config_editor.appendChild(tip);
+          }
           return;
         }
 
@@ -831,6 +864,9 @@ print('PING')`;
             }
             if (item.key === 'geofenced_grids' && Array.isArray(val)) {
               input.value = val.join(', ');
+            } else if (item.key === 'max_grid_tx_power' && Array.isArray(val)) {
+              input.value =
+                  val.map(pair => `${pair[0]}=${pair[1]}`).join(', ');
             } else {
               input.value = val !== undefined ? val : '';
             }
@@ -905,8 +941,51 @@ print('PING')`;
           val = el.value !== "" ? parseFloat(el.value) : "";
         } else if (item.key === 'geofenced_grids') {
           if (el.value.trim() !== "") {
+            // Split, trim, normalize to uppercase, and filter empty strings
             val = el.value.split(',').map(s => s.trim())
                 .filter(s => s.length > 0);
+            // Validate each grid format
+            for (const grid of val) {
+              if (!/^[A-Z]{2}([0-9]{2}([a-z]{2})?)?$/.test(grid)) {
+                item_has_error = true;
+                error_messages.push(`Geofenced Grids: '${grid}' is not ` +
+                    `a valid 2, 4, or 6-character grid.`);
+                break;
+              }
+            }
+          } else {
+            val = "";
+          }
+        } else if (item.key === 'max_grid_tx_power') {
+          if (el.value.trim() !== "") {
+            val = [];
+            const pairs = el.value.split(',').map(
+                s => s.trim()).filter(s => s.length > 0);
+            for (const p of pairs) {
+              const parts = p.split('=');
+              if (parts.length !== 2) {
+                item_has_error = true;
+                error_messages.push(`Maximum Grid TX Power: '${p}' must be ` +
+                    `in Grid=Power format (e.g., CN=1).`);
+                break;
+              }
+              const grid = parts[0].trim();
+              const power = parseInt(parts[1].trim(), 10);
+              // Validate 2, 4, or 6 character Maidenhead format
+              if (!/^[A-Z]{2}([0-9]{2}([a-z]{2})?)?$/.test(grid)) {
+                item_has_error = true;
+                error_messages.push(`Maximum Grid TX Power: '${grid}' is not ` +
+                    `a valid 2, 4, or 6-character grid.`);
+                break;
+              }
+              if (isNaN(power) || power < 0 || power > 4) {
+                item_has_error = true;
+                error_messages.push(`Maximum Grid TX Power: Power for ` +
+                    `'${grid}' must be between 0 and 4.`);
+                break;
+              }
+              val.push([grid, power]);
+            }
           } else {
             val = "";
           }
@@ -947,7 +1026,8 @@ print('PING')`;
               (item.type === 'checkbox' && val === true)) {
             if (item.type === 'checkbox') {
               if (val) new_config[item.key] = true;
-            } else if (item.key !== 'geofenced_grids' || Array.isArray(val)) {
+            } else if ((item.key !== 'geofenced_grids' &&
+                item.key !== 'max_grid_tx_power') || Array.isArray(val)) {
               new_config[item.key] = val;
             }
           }

@@ -120,9 +120,14 @@ solar elevation (in degrees).
 * `"min_uhp_elev"`: *(Integer)* Disable ultra-high power TX (17 dBm) below
 this solar elevation (in degrees).
 * `"num_initial_lp_tx"`: *(Integer)* Number of TX cycles after startup to
-use low (7 dBm) power. 
+use low (7 dBm) power.
 * `"num_initial_mp_tx"`: *(Integer)* Number of TX cycles after startup to
-use medium (10 dBm) power. 
+use medium (10 dBm) power.
+* `"maximum_grid_tx_power"`: *(Array)* List of per-grid TX power limits.
+Each limit is expressed as a `[grid, max_power]` array.
+Maidenhead grid square can be in grid2, grid4 or grid6 formats.
+Allowed power values are 0-4, where 0=ULP, 1=LP, 2=MP, 3=HP, and 4=UHP.
+Example: `[["CN", 0], ["DN87", 2], ["EM65ar", 3]]`.
 * `"tx_period"`: *(Integer)* TX period (in 10-minute cycles). For example,
 if `tx_period = 3`, Nomad will transmit U4B telemetry every 30 minutes,
 not every 10.
@@ -174,9 +179,9 @@ Nomad can be configured to send enhanced U4B standard telemetry in slot 2
 to improve the range and resolution of your data:
 
 * Latitude and longitude resolution is increased 256x, improving
-positional accuracy to just a few meters.
+positional accuracy to ~20 meters.
 * Altitude resolution is increased 20x to 1 meter.
-* Speed range is improved from 0-152 km/h to 0-310 km/h, and speed
+* Speed range is extended from 0-152 km/h to 0-310 km/h, and speed
 resolution is increased from 3.7 km/h to 1.2 km/h.
 * Voltage range is increased from 3.00-4.95V to 1.00-6.99V, with a
 resolution of 0.01V.
@@ -196,21 +201,24 @@ set `"enable_enhanced_st"` to `true` in `config.json`.
 
 ## Configuring Output Power
 
-Nomad can be configured to transmit at 4 power levels:
+Nomad can be configured to transmit at 5 power levels:
 
+- **Ultra-Low (ULP)**: reported as 0 dBm in regular callsign messages
 - **Low (LP)**: reported as 7 dBm in regular callsign messages
 - **Medium (MP)**: reported as 10 dBm
 - **High (HP)**: reported as 13 dBm
 - **Ultra-High (UHP)**: reported as 17 dBm. Requires a hardware mod
 (except on Vagabond boards).
 
-Low power modes allow you to transmit at lower solar angles.
+Low power modes allow you to transmit at lower solar angles or to avoid
+generating an excessive number of WSPR reports in certain areas.
 
-The output power is configured using 5 Nomad settings:
+The output power is configured using 6 Nomad settings:
 
 - `min_mp_elev`
 - `min_hp_elev`
 - `min_uhp_elev`
+- `max_grid_tx_power`
 - `num_initial_lp_tx`
 - `num_initial_mp_tx`
 
@@ -234,9 +242,11 @@ Nomad will default to low power.
 A power mode can be always disabled with `elev = 90` or always enabled
 with `elev = -90`.
 
+Per-grid power limits can be specified with the `max_grid_tx_power` setting.
+
 Output power can also be controlled via Custom Telemetry based on
 battery voltage, solar angle, etc. Refer to Nomad's `set_cycle_params`
-function implementation.
+function.
 
 ## Power Optimization ##
 
