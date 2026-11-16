@@ -1,18 +1,19 @@
 # Nomad
 
-Nomad is a lightweight yet full-featured multiprotocol picoballoon
+Nomad is a multiprotocol picoballoon
 tracker written in [MicroPython](https://micropython.org/). The entire
 firmware is provided as a single file (`nomad.py`) with no dependencies.
 
-In addition to supporting several existing RP2040 / RP2350 / ESP32-based
-trackers out of the box, Nomad can be adapted to new designs with
+In addition to supporting several existing RP2040 / RP2350 and ESP32-based
+boards out of the box, Nomad can be adapted to new designs with
 minimal changes. Custom boards only require a [MicroPython supported
 microcontroller](https://micropython.org/download), a GPS module, and an
-si5351a / ms5351m clock generator.
+Si5351A / MS5351M clock generator.
 
 ## Links
 * **[Online Setup Tool](https://wsprtv.com/nomad/setup.html)**
 * [GitHub Repository](https://github.com/wsprtv/nomad)
+* [WSPR Telemetry Viewer](https://wsprtv.com)
 
 ## Supported Hardware
 
@@ -178,13 +179,10 @@ and [WB8ELK](https://github.com/wsprtv/nomad/blob/main/ct_examples/wb8elk_ct.py)
 Nomad can be configured to send enhanced U4B standard telemetry in slot 2
 to improve the range and resolution of your data:
 
-* Latitude and longitude resolution is increased 256x, improving
-positional accuracy to ~20 meters.
-* Altitude resolution is increased 20x to 1 meter.
-* Speed range is extended from 0-152 km/h to 0-310 km/h, and speed
-resolution is increased from 3.7 km/h to 1.2 km/h.
-* Voltage range is increased from 3.00-4.95V to 1.00-6.99V, with a
-resolution of 0.01V.
+* Latitude and longitude resolution: ~20 meters
+* Altitude resolution: 1 meter
+* Speed range: 0-310 km/h, speed resolution: 1.2 km/h
+* Voltage range: 1.00-6.99V, voltage resolution of 0.01V
 
 Additionally, enhanced standard telemetry messages include the number
 of attempted TX cycles since boot, GPS time to first fix (TTFF), and
@@ -248,21 +246,22 @@ Output power can also be controlled via Custom Telemetry based on
 battery voltage, solar angle, etc. Refer to Nomad's `set_cycle_params`
 function.
 
-## Power Optimization ##
+## GPS Power Optimization ##
 
-By default, Nomad runs GPS whenever it is not transmitting, ensuring 
+By default, Nomad powers on GPS whenever it is not transmitting, ensuring
 that the most up-to-date positions are sent. For battery operation, you 
-can optionally specify the `max_gps_runtime` parameter to keep GPS 
+can optionally specify `max_gps_runtime` to keep GPS
 powered off until the specified number of seconds before TX. A 
 recommended setting for battery operation is 180 (3 minutes).
 
-GPS stops after obtaining a few fixes when `max_gps_runtime > 0`.
+When `max_gps_runtime > 0`, GPS is powered off after a few fixes are
+obtained.
 
 ## Ultra High Power (UHP) Hardware Modification
 
 On non-Vagabond tracker boards, enabling UHP mode in Nomad's settings
 requires adding a small wire between pin 6 (clk2) and pin 9 (clk1) of
-si5351a / ms5351m.
+Si5351A / MS5351M.
 
 <img src="images/img1.png" width=240>
 
@@ -276,11 +275,33 @@ marginal increase in current consumption (a few mA).
 
 ## Custom Telemetry
 
-When you enable Custom Telemetry (CT) in the setup tool or in
-`config.json`, Nomad expects you to upload a separate file, `nomad_ct.py`,
-containing the code to handle each CT slot. These functions
-are called `handle_slot2`, `handle_slot3`, etc. and are provided with the
-following arguments:
+To send Custom Telemetry, it is usually not necessary to modify
+`nomad.py` directly. Instead, you upload a second file into Nomad's
+filesystem, `nomad_ct.py`, that overrides the default
+implementation of one or more of the following functions:
+* **set_cycle_params** - called at startup or at the end of TX of the
+previous cycle. At a minimum, this function should set up timing for
+the next cycle, but can also override other `params` variables:
+  * `tx_start_ts` - start of next TX
+  * `gps_start_ts` - start of GPS acquisition
+  * `gps_stop_ts` - end of GPS acquisition
+  * `output_power` - [optional] TX output power (from 0=ULP to 4=UHP)
+  * `freq` - [optional] TX frequency (as an offset within the band,
+from 0 to 200)
+* **should_transmit** - called right before TX
+(in the first second after `tx_start_ts`). A TX cycle is skipped if this
+function returns False.
+* **handle_slot0** - **handle_slot4** - called right before each slot's TX time.
+These functions usually populate the `ct` object. If `ct` is left unpopulated,
+the slot is skipped.
+
+The advantage of this plugin architecture is that you don't have to
+merge your changes with the main branch. It is usually safe to
+update Nomad (by clicking **Install Latest from GitHub**) even when
+you have Custom Telemetry enabled.
+
+All of `nomad_ct.py` functions are provided with the following
+arguments:
 
 * **ct** - a CustomTelemetry object that you populate using the following
 functions:
@@ -320,25 +341,43 @@ takes a long time to finish, the watchdog needs to be fed
 `channel`, etc.
 * **default_handler** - the default handler function for this slot
 
-Your functions should only list the arguments they need, leaving the
-rest in `**other_args`. For example, if only `last_pos` is
+Your functions should only unpack the arguments they need, leaving the
+rest in `**other_args`. For example, if only `ct` and `last_pos` are
 needed, you can define your function as follows:
 
 ```python
 def handle_slot2(ct, last_pos, **other_args):
-  # Pack last_pos to ct
+  # Pack last_pos into ct
 ```
 
-If `ct` is left unpopulated, nothing is sent in that slot.
+A common way to override **set_cycle_params** and **should_transmit**
+functions is to call the default handler first:
 
-Custom telemetry messages override standard telemetry and enhanced
-standard telemetry if configured for slots 0 - 2. Sending custom
-telemetry in slot 4 is supported but not recommended, as there is not
-enough time to obtain a new GPS position for the next TX cycle.
+```python
+def set_cycle_params(params, default_handler, get_voltage, **other_args):
+  default_handler()  # this sets next_tx_ts, etc. according to settings
+  if get_voltage() < 3.3:
+    # Extend cycle to 30 minutes to save battery (from 10)
+    params.next_tx_ts += 20 * 60
+    params.gps_start_ts += 20 * 60
+    params.gps_stop_ts += 20 * 60
+    # Use low TX power during the next cycle
+    params.output_power = 1
+```
 
-In addition to slot handlers, Custom Telemetry can also override two
-additional functions -- `set_cycle_params` and `should_tx`. See
-`nomad.py` for details on how those functions are used.
+or
+
+```python
+def should_transmit(default_handler, get_voltage):
+  # Skip cycle if battery voltage is too low
+  return default_handler() and get_voltage > 3.5
+```
+
+A number of Custom Telemetry examples are availabe
+[here](https://github.com/wsprtv/nomad/tree/main/ct_examples).
+
+Do not forget to enable Custom Telemetry in settings after uploading
+`nomad_ct.py`.
 
 ### BMP280 Tutorial
 
@@ -375,8 +414,8 @@ driver.
    [BME280 repository](https://github.com/robert-hh/BME280).
 3. Open the [Nomad Setup Tool](https://wsprtv.com/nomad/setup.html) and connect
    to your board.
-4. Change "Save as main.py" to "Preserve filename", click **Upload Local File**,
-   and select your downloaded `bme280_float.py` file.
+4. Change "Save as main.py" to "Preserve filename", then click
+**Upload Local File** and select your downloaded `bme280_float.py` file.
 
 ### 3. Testing the Sensor Interface
 
@@ -438,7 +477,7 @@ def handle_slot2(ct, slot, **other_args):
 ```
 
 Nomad will automatically load this file and call `handle_slot2`
-after we enable custom telemetry using the setup tool
+after we enable Custom Telemetry using the setup tool
 or via the `enable_ct` setting in `config.json`.
 
 In this example, we use the provided `ct` argument to return BMP280
@@ -464,7 +503,7 @@ The above template can be accessed
 [here](https://wsprtv.com/tools/ct_wizard.html?spec=https%3A%2F%2Fwsprtv.com%3Fband%3D20m%26ct_dec%3Dct%2Cs%3A2_120000%3A0%3A0.01%2C1000%3A-60%3A0.1%2C324%3A0%3A50%26ct_labels%3DB280Press%2CB280Temp%2CB280Alt%26ct_llabels%3DB280%2BPressure%2CB280%2BTemperature%2CBMP280%2BAltitude%26ct_units%3D%2BhPa%2CC%2C%2Bm%26ct_res%3D2%2C1).
 
 Note that fields are specified in the reverse order of packing.
-Click "Generate URL" to create your custom telemetry link for WSPR TV.
+Click **Generate URL** to create your custom telemetry link for WSPR TV.
 
 After you upload some test transmissions, you should be able to see your
 BMP280 values in the data view of WSPR TV:
