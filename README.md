@@ -202,7 +202,7 @@ set `"enable_enhanced_st"` to `true` in `config.json`.
 Nomad can be configured to transmit at 5 power levels:
 
 - **Ultra-Low (ULP)**: reported as 0 dBm in regular callsign messages
-- **Low (LP)**: reported as 7 dBm in regular callsign messages
+- **Low (LP)**: reported as 7 dBm
 - **Medium (MP)**: reported as 10 dBm
 - **High (HP)**: reported as 13 dBm
 - **Ultra-High (UHP)**: reported as 17 dBm. Requires a hardware mod
@@ -373,7 +373,7 @@ def should_transmit(default_handler, get_voltage):
   return default_handler() and get_voltage > 3.5
 ```
 
-A number of Custom Telemetry examples are availabe
+A number of Custom Telemetry examples are available
 [here](https://github.com/wsprtv/nomad/tree/main/ct_examples).
 
 Do not forget to enable Custom Telemetry in settings after uploading
