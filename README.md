@@ -182,7 +182,7 @@ to improve the range and resolution of your data:
 * Latitude and longitude resolution: ~20 meters
 * Altitude resolution: 1 meter
 * Speed range: 0-310 km/h, speed resolution: 1.2 km/h
-* Voltage range: 1.00-6.99V, voltage resolution of 0.01V
+* Voltage range: 1.00-6.99V, voltage resolution: 0.01V
 
 Additionally, enhanced standard telemetry messages include the number
 of attempted TX cycles since boot, GPS time to first fix (TTFF), and
@@ -376,7 +376,7 @@ def should_transmit(default_handler, get_voltage):
 A number of Custom Telemetry examples are available
 [here](https://github.com/wsprtv/nomad/tree/main/ct_examples).
 
-Do not forget to enable Custom Telemetry in settings after uploading
+Remember to enable Custom Telemetry in settings after uploading
 `nomad_ct.py`.
 
 ### BMP280 Tutorial

@@ -1,4 +1,4 @@
-# Zachtek2 protocol TX
+# Generic2 protocol TX
 
 def handle_slot0(ct, last_pos, config, **other_args):
   message_type = 2 if '/' in config.callsign else 1
