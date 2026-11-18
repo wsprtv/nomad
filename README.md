@@ -291,7 +291,7 @@ from 0 to 200)
 * **should_transmit** - called right before TX
 (in the first second after `tx_start_ts`). A TX cycle is skipped if this
 function returns False.
-* **handle_slot0** - **handle_slot4** - called right before each slot's TX time.
+* **handle_slot0** - **handle_slot4** - called sometime after `tx_start_ts`.
 These functions usually populate the `ct` object. If `ct` is left unpopulated,
 the slot is skipped.
 

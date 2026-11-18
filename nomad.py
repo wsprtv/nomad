@@ -1,4 +1,4 @@
-# Nomad: U4B-Protocol Tracker v1.020
+# Nomad: U4B-Protocol Tracker v1.021
 # (C) 2026 WSPR TV authors
 # License: https://www.gnu.org/licenses/gpl-3.0.en.html
 
@@ -81,7 +81,7 @@ class Tracker:
   def _handle_slot2(self, ct, slot, **_):
     pos = self._last_pos
     if pos.altitude > self._config.max_enhanced_st_altitude: return
-    if ((self._get_time() - slot * 120) // 600) % 2 == 0:
+    if (self._cycle_params.tx_start_ts // 600) % 2 == 0:
       ct.pack(330, self._num_tx)
     else:
       ct.pack(22, min(self._ttff // 5, 21))
